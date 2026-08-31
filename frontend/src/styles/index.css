@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+
+/*THIS SECTION WAS COMMENTED OFF. USE THE GLOBALS HERE
+IN IMPLEMENTING TAILWIND TO ENSURE CONSISTENCY*/
+
+  /* COLORS 
+  --dnavy: #10245C;
+  --drkblue: #0b2c78;
+  --accblue1: #2168d7;
+  --accblue2: #294cc4;
+  --mdbblue1: #2365b3;
+  --mdbblue2: #2580d9;
+  --mdbblue3: #286db5;
+  --mgray: #5f6d84;
+  --lgray: #e8edf5;
+  --dgray: #273550;
+  --white: #ffffff;
+  --offwhite: #d9e9f8;
+  --green: #25a878;
+
+
+  --logo-color1: #2878e8;
+  --logo-color2: #173d9c;
+
+
+  --sans: 'Arial', 'Helvetica', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #10245c;
+  background: #ffffff;
+  line-height: 1.6;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+*/
