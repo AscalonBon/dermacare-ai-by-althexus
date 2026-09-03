@@ -1,47 +1,40 @@
 import '../styles/index.css';
+import logoImage from '../assets/logo.jpeg';
+import womenImage from '../assets/women-image.png';
 
 export function App() {
   return (
     <>
       {/* NAVBAR */}
-      <header className="h-[82px] px-[5%] flex items-center justify-between bg-white border-b border-[#e8edf5] relative z-10">
-        <div className="flex items-center gap-[12px]">
-          <div className="w-[42px] h-[42px] rounded-[12px] bg-gradient-to-br from-[#2878e8] to-[#173d9c] text-white flex items-center justify-center text-[25px] font-bold">
-            ✚
-          </div>
-          <div>
-            <h2 className="text-[24px] leading-[1.1] text-[#10245c] font-bold">DermaCare AI</h2>
-            <span className="block mt-[3px] text-[12px] text-[#68758d] font-normal">AI-Powered Skin Analysis & Care</span>
-          </div>
-        </div>
+      <header className="sticky top-0 z-50 border-b border-[#e8edf5] bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-[78px] max-w-[1400px] items-center justify-between px-[5%]">
+          <a href="#home" className="flex items-center gap-3">
+            <img
+              src={logoImage}
+              alt="DermaCare AI logo"
+              className="h-11 w-11 rounded-xl object-cover"
+            />
+            <div>
+              <h2 className="text-[21px] font-bold leading-tight text-[#10245c]">DermaCare AI</h2>
+              <span className="hidden text-[11px] text-[#68758d] sm:block">
+                AI-Powered Skin Analysis & Care
+              </span>
+            </div>
+          </a>
 
-        <nav className="flex gap-[38px] max-md:hidden">
-          <a href="#features" className="text-[15px] font-semibold text-[#17223d] hover:text-[#1e65d6] transition duration-300">
-            Features
-          </a>
-          <a href="#about" className="text-[15px] font-semibold text-[#17223d] hover:text-[#1e65d6] transition duration-300">
-            About
-          </a>
-          <a href="#how-it-works" className="text-[15px] font-semibold text-[#17223d] hover:text-[#1e65d6] transition duration-300">
-            How it works
-          </a>
-          <a href="#contact" className="text-[15px] font-semibold text-[#17223d] hover:text-[#1e65d6] transition duration-300">
-            Contact
-          </a>
-        </nav>
+          <nav className="hidden items-center gap-8 md:flex">
+            <a href="#home" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">Home</a>
+            <a href="#about" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">About</a>
+            <a href="#how-it-works" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">How It Works</a>
+            <a href="#features" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">Features</a>
+          </nav>
 
-        <div className="flex items-center gap-[14px]">
-          <a href="#" className="px-[28px] py-[13px] border border-[#dce2ec] rounded-[10px] font-semibold bg-white hover:border-[#1e65d6] hover:text-[#1e65d6] transition duration-300">
-            Login
-          </a>
-          <a href="#" className="inline-flex items-center justify-center px-[27px] py-[14px] rounded-[10px] bg-[#123a91] text-white font-semibold hover:bg-[#0b2c78] hover:-translate-y-[2px] transition duration-300">
-            Get Started
-          </a>
+          <div className="w-[110px] md:w-[135px]" aria-hidden="true" />
         </div>
       </header>
 
       {/* HERO */}
-      <section className="min-h-[590px] px-[5%] pt-[65px] pb-[55px] grid grid-cols-1 lg:grid-cols-2 items-center gap-[35px] overflow-hidden bg-[radial-gradient(circle_at_80%_45%,#e9f4ff_0%,#f5f9ff_35%,#ffffff_70%)]">
+      <section id="home" className="min-h-[590px] px-[5%] pt-[65px] pb-[55px] grid grid-cols-1 lg:grid-cols-2 items-center gap-[35px] overflow-hidden bg-[radial-gradient(circle_at_80%_45%,#e9f4ff_0%,#f5f9ff_35%,#ffffff_70%)]">
         <div className="max-w-[650px] relative z-[2] text-center lg:text-left mx-auto lg:mx-0">
           <div className="inline-block px-[18px] py-[10px] mb-[25px] rounded-[25px] bg-[#e9f3ff] text-[#2365b3] text-[15px] font-semibold">
             ✨ AI-Powered Skin Health Analysis
@@ -59,9 +52,6 @@ export function App() {
           <div className="flex flex-col sm:flex-row gap-[15px] justify-center lg:justify-start mb-[42px]">
             <a href="#" className="inline-flex items-center justify-center px-[27px] py-[14px] rounded-[10px] bg-[#123a91] text-white font-semibold hover:bg-[#0b2c78] hover:-translate-y-[2px] transition duration-300">
               Get Started →
-            </a>
-            <a href="#about" className="inline-flex items-center justify-center px-[29px] py-[14px] rounded-[10px] border border-[#cfd8e8] bg-white text-[#182440] font-semibold hover:border-[#2168d7] hover:text-[#2168d7] transition duration-300">
-              Learn More
             </a>
           </div>
 
@@ -101,7 +91,7 @@ export function App() {
 
         <div className="relative min-h-[530px] flex items-end justify-center">
           <img
-            src="/src/assets/women-image.png"
+            src={womenImage}
             alt="AI-powered skin analysis"
             className="w-full max-w-[590px] h-[530px] object-cover object-center rounded-[20px]"
           />
@@ -141,62 +131,111 @@ export function App() {
         </div>
       </section>
 
-      {/* WHY SECTION */}
-      <section className="px-[5%] pt-[55px] pb-[70px] bg-white" id="features">
-        <h2 className="text-center text-[#10245c] text-[32px] mb-[35px] font-bold">
-          Why Choose DermaCare AI?
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-[25px]">
-          {/* Feature 1 */}
-          <div className="min-h-[145px] px-[20px] py-[25px] flex items-start gap-[18px] border border-[#e2e7ef] rounded-[15px] bg-white hover:-translate-y-[5px] hover:shadow-[0_12px_30px_rgba(38,75,130,0.1)] transition duration-300">
-            <div className="min-w-[55px] h-[55px] rounded-full bg-[#f0f5ff] text-[#294cc4] flex items-center justify-center text-[25px] font-bold">
-              ▣
-            </div>
-            <div>
-              <h3 className="text-[#182440] text-[16px] mb-[7px] font-bold">Advanced AI Analysis</h3>
-              <p className="text-[#69758a] text-[13px] leading-[1.55] font-normal">State-of-the-art AI models analyze your skin with high accuracy.</p>
-            </div>
+      {/* ABOUT */}
+      <section id="about" className="px-[5%] py-20 bg-white">
+        <div className="mx-auto grid max-w-[1200px] items-center gap-12 md:grid-cols-2">
+          <div>
+            <p className="mb-3 text-sm font-bold uppercase tracking-[2px] text-[#2878e8]">About DermaCare AI</p>
+            <h2 className="mb-5 text-3xl font-bold leading-tight text-[#10245c] sm:text-4xl">
+              Smarter skin care starts with better insights.
+            </h2>
+            <p className="mb-5 leading-7 text-[#5f6d84]">
+              DermaCare AI is an AI-powered platform designed to help users understand visible skin concerns through image-based analysis.
+            </p>
+            <p className="leading-7 text-[#5f6d84]">
+              The platform combines intelligent analysis with clear insights and personalized skincare guidance, making skin health information easier to understand and access.
+            </p>
           </div>
 
-          {/* Feature 2 */}
-          <div className="min-h-[145px] px-[20px] py-[25px] flex items-start gap-[18px] border border-[#e2e7ef] rounded-[15px] bg-white hover:-translate-y-[5px] hover:shadow-[0_12px_30px_rgba(38,75,130,0.1)] transition duration-300">
-            <div className="min-w-[55px] h-[55px] rounded-full bg-[#f0f5ff] text-[#294cc4] flex items-center justify-center text-[25px] font-bold">
-              ☷
-            </div>
-            <div>
-              <h3 className="text-[#182440] text-[16px] mb-[7px] font-bold">Detailed Reports</h3>
-              <p className="text-[#69758a] text-[13px] leading-[1.55] font-normal">Get comprehensive reports with scores and useful insights.</p>
-            </div>
+          <div className="rounded-3xl bg-[#f3f8ff] p-8 sm:p-10">
+            <div className="mb-5 text-4xl text-[#2878e8]">✦</div>
+            <h3 className="mb-3 text-xl font-bold text-[#182440]">AI-Powered Skin Assistance</h3>
+            <p className="leading-7 text-[#5f6d84]">
+              Upload a skin image, receive an AI-based analysis, and get useful insights to better understand your skin.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section id="how-it-works" className="px-[5%] py-20 bg-[#f7faff]">
+        <div className="mx-auto max-w-[1200px]">
+          <div className="mx-auto mb-12 max-w-[650px] text-center">
+            <p className="mb-3 text-sm font-bold uppercase tracking-[2px] text-[#2878e8]">How It Works</p>
+            <h2 className="mb-4 text-3xl font-bold text-[#10245c] sm:text-4xl">Simple steps. Clear skin insights.</h2>
+            <p className="text-[#5f6d84]">
+              DermaCare AI keeps the process simple so users can move from an image to useful insights in just a few steps.
+            </p>
           </div>
 
-          {/* Feature 3 */}
-          <div className="min-h-[145px] px-[20px] py-[25px] flex items-start gap-[18px] border border-[#e2e7ef] rounded-[15px] bg-white hover:-translate-y-[5px] hover:shadow-[0_12px_30px_rgba(38,75,130,0.1)] transition duration-300">
-            <div className="min-w-[55px] h-[55px] rounded-full bg-[#f0f5ff] text-[#294cc4] flex items-center justify-center text-[25px] font-bold">
-              ✧
-            </div>
-            <div>
-              <h3 className="text-[#182440] text-[16px] mb-[7px] font-bold">Personalized Care</h3>
-              <p className="text-[#69758a] text-[13px] leading-[1.55] font-normal">Receive personalized skincare recommendations just for you.</p>
-            </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['01', 'Upload Image', 'Upload a clear image of the skin area you want to analyze.'],
+              ['02', 'AI Analysis', 'Our AI processes the image and analyzes visible skin characteristics.'],
+              ['03', 'Detect Condition', 'The system identifies possible visible skin concerns from the analysis.'],
+              ['04', 'Get Insights', 'Receive clear results and personalized skincare guidance.'],
+            ].map(([number, title, description]) => (
+              <div key={number} className="rounded-2xl border border-[#e1e8f2] bg-white p-6 shadow-[0_8px_25px_rgba(35,77,130,0.05)]">
+                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9f3ff] text-sm font-bold text-[#2168d7]">
+                  {number}
+                </div>
+                <h3 className="mb-2 text-lg font-bold text-[#182440]">{title}</h3>
+                <p className="text-sm leading-6 text-[#69758a]">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section id="features" className="px-[5%] py-20 bg-white">
+        <div className="mx-auto max-w-[1250px]">
+          <div className="mx-auto mb-12 max-w-[650px] text-center">
+            <p className="mb-3 text-sm font-bold uppercase tracking-[2px] text-[#2878e8]">Features</p>
+            <h2 className="mb-4 text-3xl font-bold text-[#10245c] sm:text-4xl">
+              Everything you need for smarter skin care
+            </h2>
+            <p className="text-[#5f6d84]">
+              Designed to make skin analysis simple, informative and personalized.
+            </p>
           </div>
 
-          {/* Feature 4 */}
-          <div className="min-h-[145px] px-[20px] py-[25px] flex items-start gap-[18px] border border-[#e2e7ef] rounded-[15px] bg-white hover:-translate-y-[5px] hover:shadow-[0_12px_30px_rgba(38,75,130,0.1)] transition duration-300">
-            <div className="min-w-[55px] h-[55px] rounded-full bg-[#f0f5ff] text-[#294cc4] flex items-center justify-center text-[25px] font-bold">
-              ♙
-            </div>
-            <div>
-              <h3 className="text-[#182440] text-[16px] mb-[7px] font-bold">Privacy First</h3>
-              <p className="text-[#69758a] text-[13px] leading-[1.55] font-normal">Your images and data are stored securely and privately.</p>
-            </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['▣', 'AI-Powered Detection', 'AI-based analysis helps identify visible skin concerns from uploaded images.'],
+              ['☷', 'Detailed Analysis', 'Get clear results with useful scores, observations and insights.'],
+              ['✧', 'Personalized Care', 'Receive skincare guidance based on the analysis and your needs.'],
+              ['✓', 'Secure & Private', 'Your images and information are handled with privacy and security in mind.'],
+            ].map(([icon, title, description]) => (
+              <div key={title} className="rounded-2xl border border-[#e2e7ef] bg-white p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[0_15px_35px_rgba(38,75,130,0.1)]">
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[#f0f5ff] text-2xl font-bold text-[#294cc4]">
+                  {icon}
+                </div>
+                <h3 className="mb-3 text-[17px] font-bold text-[#182440]">{title}</h3>
+                <p className="text-[13px] leading-6 text-[#69758a]">{description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className="py-[25px] text-center bg-[#eef6ff] text-[#68758d] text-[13px] font-normal">
-        <p>© 2026 DermaCare AI. All rights reserved.</p>
+      <footer className="border-t border-[#dfe8f3] bg-[#eef6ff] px-[5%] py-8">
+        <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-5 sm:flex-row">
+          <a href="#home" className="flex items-center gap-3">
+            <img src={logoImage} alt="DermaCare AI logo" className="h-9 w-9 rounded-lg object-cover" />
+            <span className="font-bold text-[#10245c]">DermaCare AI</span>
+          </a>
+
+          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[#68758d]">
+            <a href="#home" className="transition hover:text-[#2168d7]">Home</a>
+            <a href="#about" className="transition hover:text-[#2168d7]">About</a>
+            <a href="#how-it-works" className="transition hover:text-[#2168d7]">How It Works</a>
+            <a href="#features" className="transition hover:text-[#2168d7]">Features</a>
+          </nav>
+
+          <p className="text-center text-xs text-[#68758d]">© 2026 DermaCare AI. All rights reserved.</p>
+        </div>
       </footer>
     </>
   );
