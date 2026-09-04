@@ -1,4 +1,5 @@
 import '../styles/index.css';
+import FAQ from "./FAQ";
 
 export function App() {
   return (
@@ -193,6 +194,8 @@ export function App() {
           </div>
         </div>
       </section>
+
+       <FAQ />
 
       {/* FOOTER */}
       <footer className="py-[25px] text-center bg-[#eef6ff] text-[#68758d] text-[13px] font-normal">
