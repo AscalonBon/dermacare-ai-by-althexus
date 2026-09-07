@@ -1,5 +1,4 @@
 import '../styles/index.css';
-import FAQ from "./FAQ";
 
 export function App() {
   return (
@@ -28,6 +27,12 @@ export function App() {
           </a>
           <a href="#contact" className="text-[15px] font-semibold text-[#17223d] hover:text-[#1e65d6] transition duration-300">
             Contact
+          </a>
+          <a
+          href="/faq"
+          className="text-[15px] font-semibold text-[#17223d] hover:text-[#1e65d6] transition duration-300"
+          >
+          FAQ
           </a>
         </nav>
 
@@ -195,7 +200,7 @@ export function App() {
         </div>
       </section>
 
-       <FAQ />
+       
 
       {/* FOOTER */}
       <footer className="py-[25px] text-center bg-[#eef6ff] text-[#68758d] text-[13px] font-normal">
