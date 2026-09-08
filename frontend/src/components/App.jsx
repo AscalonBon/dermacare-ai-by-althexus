@@ -27,9 +27,15 @@ export function App() {
             <a href="#about" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">About</a>
             <a href="#how-it-works" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">How It Works</a>
             <a href="#features" className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">Features</a>
+            <a href={`${import.meta.env.BASE_URL}faq`} className="text-[15px] font-semibold text-[#17223d] transition hover:text-[#2168d7]">FAQ</a>
           </nav>
 
-          <div className="w-[110px] md:w-[135px]" aria-hidden="true" />
+          <a
+            href={`${import.meta.env.BASE_URL}dashboard`}
+            className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-[#123a91] px-5 text-sm font-semibold text-white transition hover:-translate-y-[2px] hover:bg-[#0b2c78]"
+          >
+            Dashboard
+          </a>
         </div>
       </header>
 
@@ -50,7 +56,7 @@ export function App() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-[15px] justify-center lg:justify-start mb-[42px]">
-            <a href="#" className="inline-flex items-center justify-center px-[27px] py-[14px] rounded-[10px] bg-[#123a91] text-white font-semibold hover:bg-[#0b2c78] hover:-translate-y-[2px] transition duration-300">
+            <a href={`${import.meta.env.BASE_URL}dashboard`} className="inline-flex items-center justify-center px-[27px] py-[14px] rounded-[10px] bg-[#123a91] text-white font-semibold hover:bg-[#0b2c78] hover:-translate-y-[2px] transition duration-300">
               Get Started →
             </a>
           </div>
@@ -232,6 +238,7 @@ export function App() {
             <a href="#about" className="transition hover:text-[#2168d7]">About</a>
             <a href="#how-it-works" className="transition hover:text-[#2168d7]">How It Works</a>
             <a href="#features" className="transition hover:text-[#2168d7]">Features</a>
+            <a href={`${import.meta.env.BASE_URL}faq`} className="transition hover:text-[#2168d7]">FAQ</a>
           </nav>
 
           <p className="text-center text-xs text-[#68758d]">© 2026 DermaCare AI. All rights reserved.</p>
