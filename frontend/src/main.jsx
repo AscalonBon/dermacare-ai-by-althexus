@@ -7,17 +7,19 @@ import FAQPage from './components/FAQPage.jsx'
 import DashboardPage from './components/DashboardPage.jsx'
 import AnalyzePage from './components/AnalyzePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
+import Login from "./components/common/Login";
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/" element={<App />} />
+         <Route path="/login" element={<Login />} />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
         <Route path="/report" element={<ReportPage />} />
       </Routes>
     </BrowserRouter>
-  </StrictMode>,
+  </StrictMode>
 )
