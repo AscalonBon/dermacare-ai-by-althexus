@@ -36,6 +36,13 @@ export function App() {
           >
             Dashboard
           </a>
+
+          <a
+          href={`${import.meta.env.BASE_URL}login`}
+          className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-[#123a91] px-5 text-sm font-semibold text-[#123a91] transition hover:bg-[#123a91] hover:text-white"
+          >
+  Login
+</a>
         </div>
       </header>
 
