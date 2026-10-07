@@ -1,8 +1,56 @@
-import '../styles/index.css';
+import { useEffect, useState } from "react";
+
 import logoImage from '../assets/logo.jpeg';
 import womenImage from '../assets/women-image.png';
+import AdminLogin from './admin/AdminLogin';
+import AdminDashboard from './admin/AdminDashboard';
+import AdminUsers from './admin/AdminUsers';
+import AdminSkinAnalysis from './admin/AdminSkinAnalysis';
 
 export function App() {
+  // Normalize the URL so /admin, /admin/, etc. work consistently.
+  const pathname = window.location.pathname.replace(/\/+$/, "");
+
+  const [contents, setContents] = useState([]);
+
+  useEffect(() => {
+    const loadPublishedContent = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:5000/api/content"
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setContents(data.contents || []);
+        }
+      } catch (error) {
+        console.error("Unable to load published content:", error);
+      }
+    };
+
+    loadPublishedContent();
+  }, []);
+
+  // Admin-only routes
+  if (pathname.endsWith("/admin/skin-analysis")) {
+    return <AdminSkinAnalysis />;
+  }
+
+  if (pathname.endsWith("/admin/users")) {
+    return <AdminUsers />;
+  }
+
+  if (pathname.endsWith("/admin/dashboard")) {
+    return <AdminDashboard />;
+  }
+
+  if (pathname.endsWith("/admin")) {
+    return <AdminLogin />;
+  }
+
+  // Normal public website
   return (
     <>
       {/* NAVBAR */}
@@ -224,6 +272,58 @@ export function App() {
           </div>
         </div>
       </section>
+
+      {/* PUBLISHED CONTENT */}
+      {contents.length > 0 && (
+        <section className="px-[5%] py-20 bg-[#f7faff]">
+          <div className="mx-auto max-w-[1200px]">
+
+            <div className="mx-auto mb-12 max-w-[700px] text-center">
+              <p className="mb-3 text-sm font-bold uppercase tracking-[2px] text-[#2878e8]">
+                Latest From DermaCare AI
+              </p>
+
+              <h2 className="mb-4 text-3xl font-bold text-[#10245c] sm:text-4xl">
+                Skincare Tips & Insights
+              </h2>
+
+              <p className="text-[#5f6d84]">
+                Helpful skincare information and insights from DermaCare AI.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {contents.map((item) => (
+                <article
+                  key={item._id}
+                  className="rounded-2xl border border-[#e1e8f2] bg-white p-6 shadow-[0_8px_25px_rgba(35,77,130,0.05)] transition hover:-translate-y-1 hover:shadow-[0_15px_35px_rgba(38,75,130,0.1)]"
+                >
+                  <span className="inline-block rounded-full bg-[#e9f3ff] px-3 py-1 text-xs font-semibold uppercase text-[#2168d7]">
+                    {item.category}
+                  </span>
+
+                  <h3 className="mt-4 text-xl font-bold text-[#182440]">
+                    {item.title}
+                  </h3>
+
+                  {item.description && (
+                    <p className="mt-3 text-sm leading-6 text-[#69758a]">
+                      {item.description}
+                    </p>
+                  )}
+
+                  {item.content && (
+                    <p className="mt-4 whitespace-pre-line text-sm leading-6 text-[#5f6d84]">
+                      {item.content}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+
+          </div>
+        </section>
+      )}
 
       {/* FOOTER */}
       <footer className="border-t border-[#dfe8f3] bg-[#eef6ff] px-[5%] py-8">
