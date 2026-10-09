@@ -31,6 +31,18 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["normal", "dry", "oily", "combination", "sensitive"],
     },
+
+    // Last time the user performed an activity
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    // User account status
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
