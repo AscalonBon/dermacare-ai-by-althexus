@@ -8,6 +8,7 @@ import DashboardPage from './components/DashboardPage.jsx'
 import AnalyzePage from './components/AnalyzePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
 import Login from "./components/common/Login";
+import ProfilePage from './components/common/Profile';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -19,6 +20,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
         <Route path="/report" element={<ReportPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>
