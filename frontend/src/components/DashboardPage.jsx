@@ -14,12 +14,12 @@ const analyses = [
 ];
 
 const sidebarItems = [
-	['⌂', 'Dashboard', true],
-	['♧', 'Analysis', false, analyzePath],
-	['▤', 'Reports', false, reportPath],
-	['♙', 'Profile', false, profilePath],
-	['☵', 'AI Assistant'],
-    ['⚙', 'Settings'],
+  ['⌂', 'Dashboard', true],
+  ['♧', 'Analysis', false, analyzePath],
+  ['▤', 'Reports', false, reportPath],
+  ['♙', 'Profile', false, profilePath],
+  ['☵', 'AI Assistant'],
+  ['⚙', 'Settings'],
 ];
 
 function StatusBadge({ children, tone = 'good' }) {
