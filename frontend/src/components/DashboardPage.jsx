@@ -5,6 +5,7 @@ import skinImage from '../assets/women-image.png';
 const homePath = import.meta.env.BASE_URL;
 const analyzePath = `${homePath}analyze`;
 const reportPath = `${homePath}report`;
+const profilePath = `${homePath}profile`; 
 
 const analyses = [
 	{ date: '24 Aug 2025', time: '10:30 AM', score: '82', status: 'Good', tone: 'good' },
@@ -13,12 +14,12 @@ const analyses = [
 ];
 
 const sidebarItems = [
-	['⌂', 'Dashboard', true],
-	['♧', 'Analysis', false, analyzePath],
-	['▤', 'Reports', false, reportPath],
-	['☵', 'AI Assistant'],
-	['♙', 'Profile'],
-	['⚙', 'Settings'],
+  ['⌂', 'Dashboard', true],
+  ['♧', 'Analysis', false, analyzePath],
+  ['▤', 'Reports', false, reportPath],
+  ['♙', 'Profile', false, profilePath],
+  ['☵', 'AI Assistant'],
+  ['⚙', 'Settings'],
 ];
 
 function StatusBadge({ children, tone = 'good' }) {
@@ -90,12 +91,21 @@ export default function DashboardPage() {
 				</a>
 
 				<nav className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:block" aria-label="Dashboard navigation">
-					{sidebarItems.map(([icon, label, active]) => (
-						<a key={label} href={active ? '#dashboard' : (label === 'Analysis' ? analyzePath : label === 'Reports' ? reportPath : '#')} className={`mb-1 flex min-h-11 items-center justify-center gap-3 rounded-lg px-3 text-[13px] font-semibold transition sm:flex-col sm:gap-1 lg:justify-start lg:flex-row lg:gap-3 ${active ? 'bg-[#0aa9ad] text-white shadow-[0_5px_15px_rgba(0,196,190,0.2)]' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
-							<span className="text-lg leading-none" aria-hidden="true">{icon}</span><span>{label}</span>
-						</a>
-					))}
-				</nav>
+  {sidebarItems.map(([icon, label, active, path]) => (
+    <a
+      key={label}
+      href={active ? '#dashboard' : path || '#'}
+      className={`mb-1 flex min-h-11 items-center justify-center gap-3 rounded-lg px-3 text-[13px] font-semibold transition sm:flex-col sm:gap-1 lg:flex-row lg:justify-start lg:gap-3 ${
+        active
+          ? 'bg-[#0aa9ad] text-white shadow-[0_5px_15px_rgba(0,196,190,0.2)]'
+          : 'text-white/80 hover:bg-white/10 hover:text-white'
+      }`}
+    >
+      <span className="text-lg leading-none" aria-hidden="true">{icon}</span>
+      <span>{label}</span>
+    </a>
+  ))}
+</nav>
 
 				<div className="mt-4 hidden border-t border-white/20 pt-4 lg:block">
 					<a href={homePath} className="flex items-center gap-3 rounded-lg px-3 py-3 text-[13px] font-semibold text-white/80 transition hover:bg-white/10 hover:text-white"><span className="text-lg" aria-hidden="true">↪</span>Log out</a>
