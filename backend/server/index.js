@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -34,7 +35,9 @@ class ApiError extends Error {
   }
 }
 
+// ===============================
 // Middleware
+// ===============================
 app.use(cors());
 app.use((req, res, next) => {
   res.locals.requestId = crypto.randomUUID();
@@ -43,7 +46,17 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '14mb' }));
 
+// ===============================
 // MongoDB Connection
+// ===============================
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log('MongoDB connected successfully');
+  })
+  .catch((err) => {
+    console.error('MongoDB connection error:', err);
+  });
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('MongoDB connected successfully'))
@@ -52,7 +65,9 @@ if (process.env.MONGO_URI) {
   console.error('MongoDB connection error: MONGO_URI is not configured');
 }
 
+// ===============================
 // User Profile API
+// ===============================
 app.post('/api/users', async (req, res) => {
   try {
     const user = new User(req.body);
@@ -70,11 +85,170 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// ===============================
+// Create Skin Analysis
+// ===============================
+app.post(
+  '/api/skin-analysis',
+  async (req, res) => {
+    try {
+      const analysis =
+        new SkinAnalysis(req.body);
+
+      const savedAnalysis =
+        await analysis.save();
+
+      res.status(201).json(savedAnalysis);
+
+    } catch (error) {
+      res.status(400).json({
+        error: error.message
+      });
+    }
+  }
+);
+
+// ===============================
+// Get All Skin Analyses - Admin Only
+// ===============================
+app.get(
+  '/api/admin/skin-analysis',
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const analyses =
+        await SkinAnalysis.find()
+          .populate('user', 'name email')
+          .sort({ createdAt: -1 });
+
+      res.json({
+        totalAnalyses: analyses.length,
+        analyses
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        error: error.message
+      });
+    }
+  }
+);
+
+// ===============================
+// Create Report - Admin Only
+// ===============================
+app.post(
+  '/api/admin/reports',
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const {
+        user,
+        skinAnalysis,
+        title,
+        summary,
+        recommendations,
+        status
+      } = req.body;
+
+      const report = new Report({
+        user,
+        skinAnalysis,
+        title,
+        summary,
+        recommendations,
+        status
+      });
+
+      const savedReport =
+        await report.save();
+
+      res.status(201).json(savedReport);
+
+    } catch (error) {
+      res.status(400).json({
+        error: error.message
+      });
+    }
+  }
+);
+
+// ===============================
+// Get All Reports - Admin Only
+// ===============================
+app.get(
+  '/api/admin/reports',
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const reports =
+        await Report.find()
+          .populate('user', 'name email')
+          .populate(
+            'skinAnalysis',
+            'skinType analysisResult'
+          )
+          .sort({ createdAt: -1 });
+
+      res.json({
+        totalReports: reports.length,
+        reports
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        error: error.message
+      });
+    }
+  }
+);
+
+// ===============================
+// Get Single Report - Admin Only
+// ===============================
+app.get(
+  '/api/admin/reports/:id',
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const report =
+        await Report.findById(req.params.id)
+          .populate(
+            'user',
+            'name email'
+          )
+          .populate(
+            'skinAnalysis',
+            'skinType analysisResult recommendations'
+          );
+
+      if (!report) {
+        return res.status(404).json({
+          error: 'Report not found'
+        });
+      }
+
+      res.json(report);
+
+    } catch (error) {
+      res.status(500).json({
+        error: error.message
+      });
+    }
+  }
+);
+
+// ===============================
 // Sample API Route
+// ===============================
 app.get('/api/message', (req, res) => {
-  res.json({ message: 'Hello from the Node + Express backend!' });
+  res.json({
+    message:
+      'Hello from the Node + Express backend!'
+  });
 });
 
+// ===============================
 // Image API
 app.post('/api/images', async (req, res) => {
   const { userId, fileName, contentType, imageData } = req.body ?? {};
@@ -195,6 +369,10 @@ app.use((error, req, res, next) => {
 });
 
 // Start Server
+// ===============================
 app.listen(PORT, () => {
+  console.log(
+    `Server running on port ${PORT}`
+  );
   console.log(`Server running on port ${PORT}`);
 });
