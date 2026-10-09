@@ -1,21 +1,88 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
 import skinImage from '../assets/women-image.png';
 
 const homePath = import.meta.env.BASE_URL;
-const reportPath = `${homePath}report`;
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 export default function AnalyzePage() {
+	const navigate = useNavigate();
 	const [selectedImage, setSelectedImage] = useState(null);
 	const [previewUrl, setPreviewUrl] = useState('');
+	const [errorMessage, setErrorMessage] = useState('');
+	const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+	useEffect(() => () => {
+		if (previewUrl) URL.revokeObjectURL(previewUrl);
+	}, [previewUrl]);
 
 	const handleImageChange = (event) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
+		if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+			setErrorMessage('Choose a JPG, PNG, or WEBP image.');
+			return;
+		}
+		if (file.size > 10 * 1024 * 1024) {
+			setErrorMessage('Choose an image that is 10 MB or smaller.');
+			return;
+		}
 
 		setSelectedImage(file);
 		setPreviewUrl(URL.createObjectURL(file));
+		setErrorMessage('');
+	};
+
+	const handleAnalyze = async () => {
+		if (!selectedImage || isAnalyzing) return;
+		setIsAnalyzing(true);
+		setErrorMessage('');
+
+		try {
+			const bytes = new Uint8Array(await selectedImage.arrayBuffer());
+			let binary = '';
+			for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+				binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+			}
+			const imageData = btoa(binary);
+			let userId = localStorage.getItem('dermacare-user-id');
+			if (!userId) {
+				userId = crypto.randomUUID();
+				localStorage.setItem('dermacare-user-id', userId);
+			}
+
+			const uploadResponse = await fetch(`${apiBaseUrl}/api/images`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					userId,
+					fileName: selectedImage.name,
+					contentType: selectedImage.type,
+					imageData,
+				}),
+			});
+			const uploadResult = await uploadResponse.json();
+			if (!uploadResponse.ok) {
+				throw new Error(uploadResult.error?.message || 'The image could not be saved.');
+			}
+
+			const analysisResponse = await fetch(`${apiBaseUrl}/api/images/${uploadResult.imageId}/analyze`, {
+				method: 'POST',
+			});
+			const analysisResult = await analysisResponse.json();
+			if (!analysisResponse.ok) {
+				throw new Error(analysisResult.error?.message || 'Image analysis could not be completed.');
+			}
+
+			sessionStorage.setItem('dermacare-analysis', JSON.stringify(analysisResult));
+			navigate('/report');
+		} catch (error) {
+			setErrorMessage(error.message || 'Image analysis could not be completed.');
+		} finally {
+			setIsAnalyzing(false);
+		}
 	};
 
 	return (
@@ -52,8 +119,9 @@ export default function AnalyzePage() {
 							<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageChange} className="sr-only" />
 						</label>
 
-						{selectedImage && <div className="mt-4 flex items-center justify-between rounded-lg bg-[#f3f8fc] px-4 py-3 text-xs"><span className="truncate text-[#5f6d84]">{selectedImage.name}</span><button type="button" onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="font-bold text-[#b84d50]">Remove</button></div>}
-						<a href={selectedImage ? reportPath : '#'} className={`mt-6 flex min-h-12 items-center justify-center rounded-lg text-sm font-bold text-white transition ${selectedImage ? 'bg-[#09275d] hover:bg-[#0b2c78]' : 'cursor-not-allowed bg-[#b7c4d3]'}`}>Analyze My Skin&nbsp; →</a>
+						{selectedImage && <div className="mt-4 flex items-center justify-between rounded-lg bg-[#f3f8fc] px-4 py-3 text-xs"><span className="truncate text-[#5f6d84]">{selectedImage.name}</span><button type="button" onClick={() => { setSelectedImage(null); setPreviewUrl(''); setErrorMessage(''); }} className="font-bold text-[#b84d50]">Remove</button></div>}
+						{errorMessage && <p role="alert" className="mt-4 rounded-lg bg-[#fff0f0] px-4 py-3 text-sm text-[#a8333a]">{errorMessage}</p>}
+						<button type="button" disabled={!selectedImage || isAnalyzing} onClick={handleAnalyze} className={`mt-6 flex min-h-12 w-full items-center justify-center rounded-lg text-sm font-bold text-white transition ${selectedImage && !isAnalyzing ? 'bg-[#09275d] hover:bg-[#0b2c78]' : 'cursor-not-allowed bg-[#b7c4d3]'}`}>{isAnalyzing ? 'Saving image and analyzing…' : 'Analyze Image →'}</button>
 					</section>
 
 					<aside className="space-y-5">
