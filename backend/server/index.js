@@ -3,23 +3,48 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
+const crypto = require('node:crypto');
 const User = require('./models/User');
-const Admin = require('./models/Admin');
-const SkinAnalysis = require('./models/SkinAnalysis');
-const Report = require('./models/Report');
-const Content = require('./models/Content');
+const Image = require('./models/image');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function matchesImageType(imageBytes, contentType) {
+  if (contentType === 'image/jpeg') {
+    return imageBytes.length >= 3 && imageBytes[0] === 0xff && imageBytes[1] === 0xd8 && imageBytes[2] === 0xff;
+  }
+  if (contentType === 'image/png') {
+    return imageBytes.length >= 8 && imageBytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  }
+  if (contentType === 'image/webp') {
+    return imageBytes.length >= 12
+      && imageBytes.toString('ascii', 0, 4) === 'RIFF'
+      && imageBytes.toString('ascii', 8, 12) === 'WEBP';
+  }
+  return false;
+}
+
+class ApiError extends Error {
+  constructor(status, code, message) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
 
 // ===============================
 // Middleware
 // ===============================
 app.use(cors());
-app.use(express.json());
+app.use((req, res, next) => {
+  res.locals.requestId = crypto.randomUUID();
+  res.set('X-Request-Id', res.locals.requestId);
+  next();
+});
+app.use(express.json({ limit: '14mb' }));
 
 // ===============================
 // MongoDB Connection
@@ -32,6 +57,13 @@ mongoose
   .catch((err) => {
     console.error('MongoDB connection error:', err);
   });
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('MongoDB connected successfully'))
+    .catch(err => console.error('MongoDB connection error:', err));
+} else {
+  console.error('MongoDB connection error: MONGO_URI is not configured');
+}
 
 // ===============================
 // User Profile API
@@ -43,578 +75,13 @@ app.post('/api/users', async (req, res) => {
 
     res.status(201).json(savedUser);
   } catch (error) {
-    res.status(400).json({
-      error: error.message
-    });
-  }
-});
-
-// ===============================
-// Admin Creation API
-// ===============================
-app.post('/api/admins', async (req, res) => {
-  try {
-    const admin = new Admin(req.body);
-    const savedAdmin = await admin.save();
-
-    res.status(201).json(savedAdmin);
-  } catch (error) {
-    res.status(400).json({
-      error: error.message
-    });
-  }
-});
-
-// ===============================
-// Admin Login API
-// ===============================
-app.post('/api/admin/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Email and password are required'
-      });
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      throw new ApiError(400, 'INVALID_USER', error.message);
     }
-
-    const admin = await Admin.findOne({
-      email: email.toLowerCase().trim()
-    });
-
-    if (!admin) {
-      return res.status(401).json({
-        error: 'Invalid email or password'
-      });
+    if (error.code === 11000) {
+      throw new ApiError(409, 'USER_ALREADY_EXISTS', 'A user with this email already exists.');
     }
-
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      admin.password
-    );
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        error: 'Invalid email or password'
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        id: admin._id,
-        role: admin.role
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '1h'
-      }
-    );
-
-    res.json({
-      message: 'Admin login successful',
-      token,
-      admin: {
-        id: admin._id,
-        name: admin.name,
-        email: admin.email,
-        role: admin.role
-      }
-    });
-  } catch (error) {
-    console.error('Admin login error:', error);
-
-    res.status(500).json({
-      error: error.message
-    });
-  }
-});
-
-// ===============================
-// Admin Authorization Middleware
-// ===============================
-const authenticateAdmin = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  const token =
-    authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({
-      error: 'Access token required'
-    });
-  }
-
-  try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
-
-    if (decoded.role !== 'admin') {
-      return res.status(403).json({
-        error: 'Admin access required'
-      });
-    }
-
-    req.admin = decoded;
-
-    next();
-
-  } catch (error) {
-    return res.status(401).json({
-      error: 'Invalid or expired token'
-    });
-  }
-};
-
-// ===============================
-// Update Admin Profile
-// ===============================
-app.put(
-  '/api/admin/profile',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const { name, email, password } = req.body;
-
-      const admin = await Admin.findById(req.admin.id);
-
-      if (!admin) {
-        return res.status(404).json({
-          error: 'Admin not found'
-        });
-      }
-
-      // Update name
-      if (name && name.trim()) {
-        admin.name = name.trim();
-      }
-
-      // Update email
-      if (email && email.trim()) {
-        const newEmail = email.toLowerCase().trim();
-
-        const existingAdmin = await Admin.findOne({
-          email: newEmail,
-          _id: { $ne: admin._id }
-        });
-
-        if (existingAdmin) {
-          return res.status(409).json({
-            error: 'Email is already in use'
-          });
-        }
-
-        admin.email = newEmail;
-      }
-
-      // Update password
-      if (password && password.trim()) {
-        admin.password = password.trim();
-      }
-
-      const updatedAdmin = await admin.save();
-
-      res.json({
-        message: 'Admin profile updated successfully',
-        admin: {
-          id: updatedAdmin._id,
-          name: updatedAdmin.name,
-          email: updatedAdmin.email,
-          role: updatedAdmin.role
-        }
-      });
-
-    } catch (error) {
-      console.error('Admin profile update error:', error);
-
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  }
-);
-
-// ===============================
-// Protected Admin Dashboard API
-// ===============================
-app.get(
-  '/api/admin/dashboard',
-  authenticateAdmin,
-  (req, res) => {
-    res.json({
-      message: 'Welcome to the Admin Dashboard',
-      admin: req.admin
-    });
-  }
-);
-
-// ===============================
-// Get All Users - Admin Only
-// ===============================
-app.get(
-  '/api/admin/users',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const users = await User.find()
-        .select('-__v')
-        .sort({ createdAt: -1 });
-
-      res.json({
-        totalUsers: users.length,
-        users
-      });
-
-    } catch (error) {
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  }
-);
-
-// ===============================
-// Admin Dashboard Stats
-// ===============================
-app.get(
-  '/api/admin/stats',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const totalUsers =
-        await User.countDocuments();
-
-      const totalAnalyses =
-        await SkinAnalysis.countDocuments();
-
-      const activeUsers =
-        await User.countDocuments({
-          isActive: true,
-          lastActiveAt: {
-            $gte: new Date(
-              Date.now() -
-              30 * 24 * 60 * 60 * 1000
-            )
-          }
-        });
-
-      const recentUsers =
-        await User.find()
-          .select('-__v')
-          .sort({ createdAt: -1 })
-          .limit(5);
-
-      const totalContent =
-        await Content.countDocuments();
-
-      const publishedContent =
-        await Content.countDocuments({
-          status: 'published'
-        });
-
-      const draftContent =
-        await Content.countDocuments({
-          status: 'draft'
-        });
-
-      res.json({
-        totalUsers,
-        totalAnalyses,
-        activeUsers,
-        recentUsers,
-        totalContent,
-        publishedContent,
-        draftContent
-      });
-
-    } catch (error) {
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  }
-);
-      
-// ==================================================
-// ADMIN CONTENT MANAGEMENT
-// ==================================================
-
-// ===============================
-// Get All Content
-// ===============================
-app.get(
-  '/api/admin/content',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const contents = await Content.find()
-        .sort({ createdAt: -1 });
-
-      res.json({
-        totalContent: contents.length,
-        contents
-      });
-
-    } catch (error) {
-      console.error('Get content error:', error);
-
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  }
-);
-
-// ===============================
-// Create Content
-// ===============================
-app.post(
-  '/api/admin/content',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const {
-        title,
-        category,
-        description,
-        content,
-        status
-      } = req.body;
-
-      if (!title || !title.trim()) {
-        return res.status(400).json({
-          error: 'Title is required'
-        });
-      }
-
-      if (!category || !category.trim()) {
-        return res.status(400).json({
-          error: 'Category is required'
-        });
-      }
-
-      const newContent = new Content({
-        title: title.trim(),
-        category: category.trim(),
-        description: description || '',
-        content: content || '',
-        status:
-          status === 'published'
-            ? 'published'
-            : 'draft'
-      });
-
-      const savedContent =
-        await newContent.save();
-
-      res.status(201).json({
-        message: 'Content created successfully',
-        content: savedContent
-      });
-
-    } catch (error) {
-      console.error('Create content error:', error);
-
-      res.status(400).json({
-        error: error.message
-      });
-    }
-  }
-);
-
-// ===============================
-// Update Content
-// ===============================
-app.put(
-  '/api/admin/content/:id',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const {
-        title,
-        category,
-        description,
-        content,
-        status
-      } = req.body;
-
-      const existingContent =
-        await Content.findById(req.params.id);
-
-      if (!existingContent) {
-        return res.status(404).json({
-          error: 'Content not found'
-        });
-      }
-
-      if (title !== undefined) {
-        if (!title.trim()) {
-          return res.status(400).json({
-            error: 'Title cannot be empty'
-          });
-        }
-
-        existingContent.title = title.trim();
-      }
-
-      if (category !== undefined) {
-        if (!category.trim()) {
-          return res.status(400).json({
-            error: 'Category cannot be empty'
-          });
-        }
-
-        existingContent.category =
-          category.trim();
-      }
-
-      if (description !== undefined) {
-        existingContent.description =
-          description;
-      }
-
-      if (content !== undefined) {
-        existingContent.content = content;
-      }
-
-      if (status !== undefined) {
-        if (
-          !['draft', 'published'].includes(status)
-        ) {
-          return res.status(400).json({
-            error:
-              'Status must be draft or published'
-          });
-        }
-
-        existingContent.status = status;
-      }
-
-      const updatedContent =
-        await existingContent.save();
-
-      res.json({
-        message: 'Content updated successfully',
-        content: updatedContent
-      });
-
-    } catch (error) {
-      console.error('Update content error:', error);
-
-      res.status(400).json({
-        error: error.message
-      });
-    }
-  }
-);
-
-// ===============================
-// Delete Content
-// ===============================
-app.delete(
-  '/api/admin/content/:id',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const deletedContent =
-        await Content.findByIdAndDelete(
-          req.params.id
-        );
-
-      if (!deletedContent) {
-        return res.status(404).json({
-          error: 'Content not found'
-        });
-      }
-
-      res.json({
-        message: 'Content deleted successfully'
-      });
-
-    } catch (error) {
-      console.error('Delete content error:', error);
-
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  }
-);
-
-// ===============================
-// Change Content Status
-// ===============================
-app.patch(
-  '/api/admin/content/:id/status',
-  authenticateAdmin,
-  async (req, res) => {
-    try {
-      const { status } = req.body;
-
-      if (
-        !['draft', 'published'].includes(status)
-      ) {
-        return res.status(400).json({
-          error:
-            'Status must be draft or published'
-        });
-      }
-
-      const updatedContent =
-        await Content.findByIdAndUpdate(
-          req.params.id,
-          { status },
-          {
-            new: true,
-            runValidators: true
-          }
-        );
-
-      if (!updatedContent) {
-        return res.status(404).json({
-          error: 'Content not found'
-        });
-      }
-
-      res.json({
-        message:
-          'Content status updated successfully',
-        content: updatedContent
-      });
-
-    } catch (error) {
-      console.error(
-        'Content status update error:',
-        error
-      );
-
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  }
-);
-// ===============================
-// Public Content API
-// ===============================
-app.get('/api/content', async (req, res) => {
-  try {
-    const contents = await Content.find({
-      status: 'published'
-    }).sort({ createdAt: -1 });
-
-    res.json({
-      totalContent: contents.length,
-      contents
-    });
-
-  } catch (error) {
-    console.error('Public content error:', error);
-
-    res.status(500).json({
-      error: error.message
-    });
+    throw error;
   }
 });
 
@@ -782,10 +249,130 @@ app.get('/api/message', (req, res) => {
 });
 
 // ===============================
+// Image API
+app.post('/api/images', async (req, res) => {
+  const { userId, fileName, contentType, imageData } = req.body ?? {};
+  if (typeof userId !== 'string' || !userId.trim() || userId.length > 128) {
+    throw new ApiError(400, 'INVALID_USER_ID', 'A valid userId is required.');
+  }
+  if (typeof fileName !== 'string' || !fileName.trim() || fileName.length > 255) {
+    throw new ApiError(400, 'INVALID_FILE_NAME', 'A valid fileName is required.');
+  }
+  if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
+    throw new ApiError(415, 'UNSUPPORTED_IMAGE_TYPE', 'Upload a JPG, PNG, or WEBP image.');
+  }
+  if (typeof imageData !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(imageData)) {
+    throw new ApiError(400, 'INVALID_IMAGE_DATA', 'Image data must be valid base64.');
+  }
+
+  const imageBytes = Buffer.from(imageData, 'base64');
+  if (imageBytes.length === 0 || imageBytes.length > MAX_IMAGE_BYTES) {
+    throw new ApiError(413, 'IMAGE_SIZE_LIMIT', 'Image must be 10 MB or smaller.');
+  }
+  if (!matchesImageType(imageBytes, contentType)) {
+    throw new ApiError(400, 'INVALID_IMAGE', 'The image content does not match its declared file type.');
+  }
+
+  const savedImage = await new Image({
+    userId: userId.trim(),
+    fileName: fileName.trim(),
+    contentType,
+    imageData: imageBytes,
+  }).save();
+
+  res.status(201).json({
+    message: 'Image saved successfully',
+    imageId: savedImage._id,
+  });
+});
+
+app.get('/api/images/:imageId', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.imageId)) {
+    throw new ApiError(400, 'INVALID_IMAGE_ID', 'The image ID is invalid.');
+  }
+
+  const image = await Image.findById(req.params.imageId).select('contentType imageData');
+  if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+
+  res.set('Content-Type', image.contentType);
+  res.set('Cache-Control', 'private, no-store');
+  res.send(image.imageData);
+});
+
+app.post('/api/images/:imageId/analyze', async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.imageId)) {
+    throw new ApiError(400, 'INVALID_IMAGE_ID', 'The image ID is invalid.');
+  }
+
+  const image = await Image.findById(req.params.imageId).select('contentType imageData');
+  if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+
+  const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000';
+  let response;
+  try {
+    response = await fetch(`${mlServiceUrl.replace(/\/$/, '')}/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': image.contentType,
+        'X-Request-Id': res.locals.requestId,
+      },
+      body: image.imageData,
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new ApiError(503, 'ML_SERVICE_UNAVAILABLE', 'Image analysis is temporarily unavailable.');
+  }
+
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    if (response.status < 500) {
+      throw new ApiError(response.status, detail?.error?.code || 'IMAGE_ANALYSIS_FAILED', detail?.error?.message || 'Image analysis failed.');
+    }
+    throw new ApiError(502, 'ML_SERVICE_ERROR', 'Image analysis could not be completed.');
+  }
+
+  res.json({
+    imageId: image._id,
+    imageUrl: `/api/images/${image._id}`,
+    ...(await response.json()),
+  });
+});
+
+app.use((req, res, next) => {
+  next(new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.'));
+});
+
+app.use((error, req, res, next) => {
+  const requestId = res.locals.requestId || crypto.randomUUID();
+  const status = Number.isInteger(error.status) ? error.status : 500;
+  const code = error instanceof ApiError
+    ? error.code
+    : status === 413
+      ? 'PAYLOAD_TOO_LARGE'
+      : status === 400
+        ? 'INVALID_REQUEST'
+        : status >= 500
+          ? 'INTERNAL_SERVER_ERROR'
+          : 'REQUEST_ERROR';
+  const message = status >= 500
+    ? 'An unexpected server error occurred.'
+    : error instanceof ApiError
+      ? error.message
+      : status === 413
+        ? 'Request body exceeds the allowed size.'
+        : status === 400
+          ? 'Request body is invalid.'
+          : 'The request could not be processed.';
+
+  if (status >= 500) console.error(`[${requestId}]`, error);
+  res.status(status).json({ error: { code, message, requestId } });
+});
+
 // Start Server
 // ===============================
 app.listen(PORT, () => {
   console.log(
     `Server running on port ${PORT}`
   );
+  console.log(`Server running on port ${PORT}`);
 });
