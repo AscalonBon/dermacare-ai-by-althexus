@@ -49,6 +49,22 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '4200kb' }));
 
+app.get('/api/health', async (req, res) => {
+  try {
+    await connectDB();
+    const readyState = mongoose.connection.readyState;
+    res.json({ ok: readyState === 1, readyState });
+  } catch (error) {
+    console.error(`[${res.locals.requestId}] MongoDB health check failed`, error);
+    res.status(503).json({
+      ok: false,
+      readyState: mongoose.connection.readyState,
+      error: 'MongoDB connection failed.',
+      requestId: res.locals.requestId,
+    });
+  }
+});
+
 async function requireDatabase(req, res, next) {
   try {
     await connectDB();
