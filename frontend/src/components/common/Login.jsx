@@ -5,6 +5,7 @@ const apiBaseUrl = (
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? 'http://localhost:5000' : '')
 ).replace(/\/$/, '');
+const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -26,11 +27,6 @@ const Login = () => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
-    if (!apiBaseUrl) {
-      setMessage({ type: 'error', text: 'The API URL is not configured. Set VITE_API_URL and redeploy the frontend.' });
-      return;
-    }
-
     if (!formData.email.trim() || !formData.password) {
       setMessage({ type: 'error', text: 'Please enter your email and password.' });
       return;
@@ -49,6 +45,17 @@ const Login = () => {
         setMessage({ type: 'error', text: 'Passwords do not match.' });
         return;
       }
+    }
+
+    if (demoMode) {
+      sessionStorage.setItem('dermacare-demo-mode', 'true');
+      navigate('/dashboard');
+      return;
+    }
+
+    if (!apiBaseUrl) {
+      setMessage({ type: 'error', text: 'The API URL is not configured. Set VITE_API_URL and redeploy the frontend.' });
+      return;
     }
 
     setIsSubmitting(true);
@@ -78,6 +85,7 @@ const Login = () => {
       localStorage.setItem('dermacare-auth-token', result.token);
       localStorage.setItem('dermacare-user', JSON.stringify(result.user));
       localStorage.setItem('dermacare-user-id', result.user.id);
+      sessionStorage.removeItem('dermacare-demo-mode');
       navigate('/dashboard');
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to connect to the server.' });
@@ -106,6 +114,11 @@ const Login = () => {
           <p className="text-sm text-[#5F6D84] m-0">
             {isLogin ? 'Welcome back' : 'Create your account'}
           </p>
+          {demoMode && (
+            <p role="status" className="mt-3 rounded-lg bg-[#fff8eb] px-3 py-2 text-xs leading-5 text-[#715b34]">
+              Presentation demo mode is enabled. Submitting this form opens the dashboard without contacting the server or creating an account.
+            </p>
+          )}
         </div>
 
         {/* Form */}
