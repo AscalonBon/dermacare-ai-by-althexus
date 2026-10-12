@@ -79,6 +79,8 @@ function ProgressChart() {
 }
 
 export default function DashboardPage() {
+	const isDemoMode = sessionStorage.getItem('dermacare-demo-mode') === 'true';
+
 	return (
 		<div className="min-h-screen bg-[#f7f9fc] text-[#182440] lg:flex">
 			<aside className="flex w-full shrink-0 flex-col bg-[#062456] px-4 py-5 text-white lg:min-h-screen lg:w-[218px] lg:px-3">
@@ -120,14 +122,15 @@ export default function DashboardPage() {
 			</aside>
 
 			<main id="dashboard" className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+				{isDemoMode && <p role="status" className="mb-5 rounded-lg border border-[#f1d89c] bg-[#fff8eb] px-4 py-3 text-sm font-medium text-[#715b34]">Presentation demo — authentication and data saving are disabled.</p>}
 				<header className="mb-6 flex items-center justify-between gap-4">
 					<div>
-						<h1 className="text-2xl font-bold tracking-[-0.5px] text-[#10245c] sm:text-3xl">Welcome back, Priya <span aria-hidden="true">👋</span></h1>
+						<h1 className="text-2xl font-bold tracking-[-0.5px] text-[#10245c] sm:text-3xl">Welcome back, Test <span aria-hidden="true">👋</span></h1>
 						<p className="mt-1 text-sm text-[#69758a]">Here&apos;s your skin health overview.</p>
 					</div>
 					<div className="flex items-center gap-4">
 						<button type="button" aria-label="View notifications" className="relative hidden text-2xl text-[#182440] sm:block">♧<span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#bd3f4d] text-[9px] text-white">3</span></button>
-						<button type="button" aria-label="Open profile menu" className="flex items-center gap-2"><img src={skinImage} alt="Priya profile" className="h-10 w-10 rounded-full object-cover object-[48%_35%]" /><span className="text-sm text-[#69758a]">⌄</span></button>
+						<button type="button" aria-label="Open profile menu" className="flex items-center gap-2"><img src={skinImage} alt="Test profile" className="h-10 w-10 rounded-full object-cover object-[48%_35%]" /><span className="text-sm text-[#69758a]">⌄</span></button>
 					</div>
 				</header>
 
