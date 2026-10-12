@@ -6,10 +6,13 @@ const cors = require('cors');
 const crypto = require('node:crypto');
 const User = require('./models/User');
 const Image = require('./models/image');
+const SkinAnalysis = require('./models/SkinAnalysis');
+const Report = require('./models/Report');
+const connectDB = require('./lib/mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function matchesImageType(imageBytes, contentType) {
@@ -44,30 +47,41 @@ app.use((req, res, next) => {
   res.set('X-Request-Id', res.locals.requestId);
   next();
 });
-app.use(express.json({ limit: '14mb' }));
+app.use(express.json({ limit: '4200kb' }));
 
-// ===============================
-// MongoDB Connection
-// ===============================
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('MongoDB connected successfully');
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-  });
-if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB connected successfully'))
-    .catch(err => console.error('MongoDB connection error:', err));
-} else {
-  console.error('MongoDB connection error: MONGO_URI is not configured');
+async function requireDatabase(req, res, next) {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+function authenticateAdmin(req, res, next) {
+  const configuredKey = process.env.ADMIN_API_KEY;
+  if (!configuredKey) {
+    return next(new ApiError(503, 'ADMIN_AUTH_NOT_CONFIGURED', 'Admin API authentication is not configured.'));
+  }
+
+  const authorization = req.get('authorization') || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return next(new ApiError(401, 'UNAUTHORIZED', 'A valid admin bearer token is required.'));
+  }
+
+  const expected = Buffer.from(configuredKey);
+  const actual = Buffer.from(match[1]);
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+    return next(new ApiError(401, 'UNAUTHORIZED', 'A valid admin bearer token is required.'));
+  }
+  next();
 }
 
 // ===============================
 // User Profile API
 // ===============================
+app.use('/api/users', requireDatabase);
 app.post('/api/users', async (req, res) => {
   try {
     const user = new User(req.body);
@@ -88,6 +102,7 @@ app.post('/api/users', async (req, res) => {
 // ===============================
 // Create Skin Analysis
 // ===============================
+app.use('/api/skin-analysis', requireDatabase);
 app.post(
   '/api/skin-analysis',
   async (req, res) => {
@@ -111,9 +126,9 @@ app.post(
 // ===============================
 // Get All Skin Analyses - Admin Only
 // ===============================
+app.use('/api/admin', authenticateAdmin, requireDatabase);
 app.get(
   '/api/admin/skin-analysis',
-  authenticateAdmin,
   async (req, res) => {
     try {
       const analyses =
@@ -139,7 +154,6 @@ app.get(
 // ===============================
 app.post(
   '/api/admin/reports',
-  authenticateAdmin,
   async (req, res) => {
     try {
       const {
@@ -178,7 +192,6 @@ app.post(
 // ===============================
 app.get(
   '/api/admin/reports',
-  authenticateAdmin,
   async (req, res) => {
     try {
       const reports =
@@ -208,7 +221,6 @@ app.get(
 // ===============================
 app.get(
   '/api/admin/reports/:id',
-  authenticateAdmin,
   async (req, res) => {
     try {
       const report =
@@ -250,6 +262,7 @@ app.get('/api/message', (req, res) => {
 
 // ===============================
 // Image API
+app.use('/api/images', requireDatabase);
 app.post('/api/images', async (req, res) => {
   const { userId, fileName, contentType, imageData } = req.body ?? {};
   if (typeof userId !== 'string' || !userId.trim() || userId.length > 128) {
@@ -267,7 +280,7 @@ app.post('/api/images', async (req, res) => {
 
   const imageBytes = Buffer.from(imageData, 'base64');
   if (imageBytes.length === 0 || imageBytes.length > MAX_IMAGE_BYTES) {
-    throw new ApiError(413, 'IMAGE_SIZE_LIMIT', 'Image must be 10 MB or smaller.');
+    throw new ApiError(413, 'IMAGE_SIZE_LIMIT', 'Image must be 3 MB or smaller.');
   }
   if (!matchesImageType(imageBytes, contentType)) {
     throw new ApiError(400, 'INVALID_IMAGE', 'The image content does not match its declared file type.');
@@ -307,7 +320,10 @@ app.post('/api/images/:imageId/analyze', async (req, res) => {
   const image = await Image.findById(req.params.imageId).select('contentType imageData');
   if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
 
-  const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000';
+  if (!process.env.ML_SERVICE_URL) {
+    throw new ApiError(503, 'ML_SERVICE_NOT_CONFIGURED', 'Image analysis service is not configured.');
+  }
+  const mlServiceUrl = process.env.ML_SERVICE_URL;
   let response;
   try {
     response = await fetch(`${mlServiceUrl.replace(/\/$/, '')}/analyze`, {
@@ -370,9 +386,10 @@ app.use((error, req, res, next) => {
 
 // Start Server
 // ===============================
-app.listen(PORT, () => {
-  console.log(
-    `Server running on port ${PORT}`
-  );
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
