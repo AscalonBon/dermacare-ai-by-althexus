@@ -61,16 +61,10 @@ app.use(express.json({ limit: '4200kb' }));
 app.get('/api/health', async (req, res) => {
   try {
     await connectDB();
-    const readyState = mongoose.connection.readyState;
-    res.json({ ok: readyState === 1, readyState });
+    res.json({ ok: mongoose.connection.readyState === 1 });
   } catch (error) {
     console.error(`[${res.locals.requestId}] MongoDB health check failed`, error);
-    res.status(503).json({
-      ok: false,
-      readyState: mongoose.connection.readyState,
-      error: 'MongoDB connection failed.',
-      requestId: res.locals.requestId,
-    });
+    res.status(503).json({ ok: false, error: error.message });
   }
 });
 
