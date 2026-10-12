@@ -14,6 +14,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_ORIGINS = new Set([
+  'https://dermacare-ai-by-althexus.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]);
 
 function matchesImageType(imageBytes, contentType) {
   if (contentType === 'image/jpeg') {
@@ -41,7 +46,11 @@ class ApiError extends Error {
 // ===============================
 // Middleware
 // ===============================
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || ALLOWED_ORIGINS.has(origin));
+  },
+}));
 app.use((req, res, next) => {
   res.locals.requestId = crypto.randomUUID();
   res.set('X-Request-Id', res.locals.requestId);
