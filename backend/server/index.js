@@ -9,6 +9,13 @@ const Image = require('./models/image');
 const SkinAnalysis = require('./models/SkinAnalysis');
 const Report = require('./models/Report');
 const connectDB = require('./lib/mongodb');
+const {
+  createAuthToken,
+  getAuthUserId,
+  getTokenSecret,
+  hashPassword,
+  verifyPassword,
+} = require('./lib/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,6 +84,75 @@ async function requireDatabase(req, res, next) {
   }
 }
 
+function requireUserAuthentication(req, res, next) {
+  const authorization = req.get('authorization') || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const userId = match ? getAuthUserId(match[1]) : null;
+  if (!userId || !mongoose.isValidObjectId(userId)) {
+    return next(new ApiError(401, 'UNAUTHORIZED', 'Sign in to continue.'));
+  }
+  req.authenticatedUserId = userId;
+  next();
+}
+
+function publicUser(user) {
+  return { id: user._id.toString(), name: user.name, email: user.email };
+}
+
+async function registerUser(req, res) {
+  const { name, email, password } = req.body ?? {};
+  if (typeof name !== 'string' || !name.trim() || name.trim().length > 100) {
+    throw new ApiError(400, 'INVALID_NAME', 'Enter your name (up to 100 characters).');
+  }
+  if (typeof email !== 'string' || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    throw new ApiError(400, 'INVALID_EMAIL', 'Enter a valid email address.');
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+    throw new ApiError(400, 'INVALID_PASSWORD', 'Password must be between 8 and 128 characters.');
+  }
+
+  try {
+    getTokenSecret();
+  } catch (error) {
+    throw new ApiError(503, 'AUTH_NOT_CONFIGURED', error.message);
+  }
+
+  const user = new User({
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    passwordHash: await hashPassword(password),
+  });
+  try {
+    await user.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(409, 'EMAIL_ALREADY_REGISTERED', 'An account with this email already exists.');
+    }
+    throw error;
+  }
+
+  res.status(201).json({ user: publicUser(user), token: createAuthToken(user._id.toString()) });
+}
+
+async function loginUser(req, res) {
+  const { email, password } = req.body ?? {};
+  if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
+    throw new ApiError(400, 'INVALID_CREDENTIALS', 'Enter your email and password.');
+  }
+  try {
+    getTokenSecret();
+  } catch (error) {
+    throw new ApiError(503, 'AUTH_NOT_CONFIGURED', error.message);
+  }
+
+  const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+passwordHash');
+  if (!user || !user.isActive || !(await verifyPassword(password, user.passwordHash))) {
+    throw new ApiError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
+  }
+
+  res.json({ user: publicUser(user), token: createAuthToken(user._id.toString()) });
+}
+
 function authenticateAdmin(req, res, next) {
   const configuredKey = process.env.ADMIN_API_KEY;
   if (!configuredKey) {
@@ -98,23 +174,20 @@ function authenticateAdmin(req, res, next) {
 }
 
 // ===============================
-// User Profile API
+// User authentication
 // ===============================
-app.use('/api/users', requireDatabase);
-app.post('/api/users', async (req, res) => {
+app.use('/api/auth', requireDatabase);
+app.post('/api/auth/register', registerUser);
+app.post('/api/auth/login', loginUser);
+app.get('/api/auth/me', requireUserAuthentication, async (req, res, next) => {
   try {
-    const user = new User(req.body);
-    const savedUser = await user.save();
-
-    res.status(201).json(savedUser);
+    const user = await User.findById(req.authenticatedUserId);
+    if (!user || !user.isActive) {
+      return next(new ApiError(401, 'UNAUTHORIZED', 'This account is unavailable.'));
+    }
+    res.json({ user: publicUser(user) });
   } catch (error) {
-    if (error.name === 'ValidationError' || error.name === 'CastError') {
-      throw new ApiError(400, 'INVALID_USER', error.message);
-    }
-    if (error.code === 11000) {
-      throw new ApiError(409, 'USER_ALREADY_EXISTS', 'A user with this email already exists.');
-    }
-    throw error;
+    next(error);
   }
 });
 
@@ -281,12 +354,9 @@ app.get('/api/message', (req, res) => {
 
 // ===============================
 // Image API
-app.use('/api/images', requireDatabase);
+app.use('/api/images', requireDatabase, requireUserAuthentication);
 app.post('/api/images', async (req, res) => {
-  const { userId, fileName, contentType, imageData } = req.body ?? {};
-  if (typeof userId !== 'string' || !userId.trim() || userId.length > 128) {
-    throw new ApiError(400, 'INVALID_USER_ID', 'A valid userId is required.');
-  }
+  const { fileName, contentType, imageData } = req.body ?? {};
   if (typeof fileName !== 'string' || !fileName.trim() || fileName.length > 255) {
     throw new ApiError(400, 'INVALID_FILE_NAME', 'A valid fileName is required.');
   }
@@ -306,7 +376,7 @@ app.post('/api/images', async (req, res) => {
   }
 
   const savedImage = await new Image({
-    userId: userId.trim(),
+    userId: req.authenticatedUserId,
     fileName: fileName.trim(),
     contentType,
     imageData: imageBytes,
@@ -325,6 +395,9 @@ app.get('/api/images/:imageId', async (req, res) => {
 
   const image = await Image.findById(req.params.imageId).select('contentType imageData');
   if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  if (image.userId !== req.authenticatedUserId) {
+    throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  }
 
   res.set('Content-Type', image.contentType);
   res.set('Cache-Control', 'private, no-store');
@@ -338,6 +411,9 @@ app.post('/api/images/:imageId/analyze', async (req, res) => {
 
   const image = await Image.findById(req.params.imageId).select('contentType imageData');
   if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  if (image.userId !== req.authenticatedUserId) {
+    throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  }
 
   if (!process.env.ML_SERVICE_URL) {
     throw new ApiError(503, 'ML_SERVICE_NOT_CONFIGURED', 'Image analysis service is not configured.');

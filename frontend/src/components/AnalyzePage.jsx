@@ -6,7 +6,7 @@ import skinImage from '../assets/women-image.png';
 
 const homePath = import.meta.env.BASE_URL;
 const apiBaseUrl = (
-	import.meta.env.VITE_API_BASE_URL ||
+	import.meta.env.VITE_API_URL ||
 	(import.meta.env.DEV ? 'http://localhost:5000' : '')
 ).replace(/\/$/, '');
 
@@ -40,8 +40,13 @@ export default function AnalyzePage() {
 
 	const handleAnalyze = async () => {
 		if (!selectedImage || isAnalyzing) return;
+		const authToken = localStorage.getItem('dermacare-auth-token');
+		if (!authToken) {
+			setErrorMessage('Please sign in or create an account before uploading an image.');
+			return;
+		}
 		if (!apiBaseUrl && !import.meta.env.DEV) {
-			setErrorMessage('The API URL is not configured. Set VITE_API_BASE_URL and redeploy the frontend.');
+			setErrorMessage('The API URL is not configured. Set VITE_API_URL and redeploy the frontend.');
 			return;
 		}
 		setIsAnalyzing(true);
@@ -54,17 +59,14 @@ export default function AnalyzePage() {
 				binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
 			}
 			const imageData = btoa(binary);
-			let userId = localStorage.getItem('dermacare-user-id');
-			if (!userId) {
-				userId = crypto.randomUUID();
-				localStorage.setItem('dermacare-user-id', userId);
-			}
 
 			const uploadResponse = await fetch(`${apiBaseUrl}/api/images`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${authToken}`,
+				},
 				body: JSON.stringify({
-					userId,
 					fileName: selectedImage.name,
 					contentType: selectedImage.type,
 					imageData,
@@ -77,6 +79,7 @@ export default function AnalyzePage() {
 
 			const analysisResponse = await fetch(`${apiBaseUrl}/api/images/${uploadResult.imageId}/analyze`, {
 				method: 'POST',
+				headers: { Authorization: `Bearer ${authToken}` },
 			});
 			const analysisResult = await analysisResponse.json();
 			if (!analysisResponse.ok) {
