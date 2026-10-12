@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+const apiBaseUrl = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? 'http://localhost:5000' : '')
+).replace(/\/$/, '');
 
 const Login = () => {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -14,18 +22,27 @@ const Login = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
 
-    if (!formData.email || !formData.password) {
-      setMessage({ type: 'error', text: 'Please fill in all fields.' });
+    if (!apiBaseUrl) {
+      setMessage({ type: 'error', text: 'The API URL is not configured. Set VITE_API_URL and redeploy the frontend.' });
+      return;
+    }
+
+    if (!formData.email.trim() || !formData.password) {
+      setMessage({ type: 'error', text: 'Please enter your email and password.' });
       return;
     }
 
     if (!isLogin) {
-      if (!formData.name) {
+      if (!formData.name.trim()) {
         setMessage({ type: 'error', text: 'Please enter your name.' });
+        return;
+      }
+      if (formData.password.length < 8) {
+        setMessage({ type: 'error', text: 'Password must be at least 8 characters.' });
         return;
       }
       if (formData.password !== formData.confirmPassword) {
@@ -34,16 +51,38 @@ const Login = () => {
       }
     }
 
-    // 🔄 TODO: Replace with actual API call
-    if (isLogin) {
-      setMessage({ type: 'success', text: 'Login successful! (placeholder)' });
-    } else {
-      setMessage({ type: 'success', text: 'Account created! (placeholder)' });
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/${isLogin ? 'login' : 'register'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(isLogin ? {} : { name: formData.name.trim() }),
+          email: formData.email.trim(),
+          password: formData.password,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Unable to authenticate. Please try again.');
+      }
+      if (!result.token || !result.user?.id) {
+        throw new Error('The server returned an invalid authentication response.');
+      }
+
+      localStorage.setItem('dermacare-auth-token', result.token);
+      localStorage.setItem('dermacare-user', JSON.stringify(result.user));
+      localStorage.setItem('dermacare-user-id', result.user.id);
+      navigate('/dashboard');
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Unable to connect to the server.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const switchMode = () => {
-    setIsLogin(!isLogin);
+    setIsLogin((current) => !current);
     setFormData({ name: '', email: '', password: '', confirmPassword: '' });
     setMessage({ type: '', text: '' });
   };
@@ -75,6 +114,8 @@ const Login = () => {
                 type="text"
                 id="name"
                 name="name"
+                required
+                maxLength={100}
                 placeholder="Enter your full name"
                 value={formData.name}
                 onChange={handleChange}
@@ -92,6 +133,7 @@ const Login = () => {
               type="email"
               id="email"
               name="email"
+              required
               placeholder="you@example.com"
               value={formData.email}
               onChange={handleChange}
@@ -108,6 +150,9 @@ const Login = () => {
               type="password"
               id="password"
               name="password"
+              required
+              minLength={isLogin ? undefined : 8}
+              maxLength={128}
               placeholder="Enter your password"
               value={formData.password}
               onChange={handleChange}
@@ -125,6 +170,8 @@ const Login = () => {
                 type="password"
                 id="confirmPassword"
                 name="confirmPassword"
+                required
+                maxLength={128}
                 placeholder="Re-enter your password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
@@ -148,9 +195,10 @@ const Login = () => {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full py-[13px] text-[15px] font-semibold font-[Arial,Helvetica,sans-serif] text-white bg-[#123a91] border-none rounded-[10px] cursor-pointer transition-all duration-200 mt-1.5 hover:bg-[#0B2C78] hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(18,58,145,0.25)] active:translate-y-0 focus-visible:outline-[3px] focus-visible:outline-[#2168D7] focus-visible:outline-offset-2 max-sm:py-3 max-sm:text-sm"
           >
-            {isLogin ? 'Login' : 'Create Account'}
+            {isSubmitting ? 'Please wait…' : isLogin ? 'Login' : 'Create Account'}
           </button>
         </form>
 
