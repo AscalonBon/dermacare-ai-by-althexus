@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: process.env.VERCEL ? '/' : '/dermacare-ai-by-althexus/',
+  base: process.env.GITHUB_ACTIONS ? '/dermacare-ai-by-althexus/' : '/',
   build: {
     outDir: 'dist',
   },
