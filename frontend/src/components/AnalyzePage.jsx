@@ -5,7 +5,10 @@ import logoImage from '../assets/logo.jpeg';
 import skinImage from '../assets/women-image.png';
 
 const homePath = import.meta.env.BASE_URL;
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const apiBaseUrl = (
+	import.meta.env.VITE_API_BASE_URL ||
+	(import.meta.env.DEV ? 'http://localhost:5000' : '')
+).replace(/\/$/, '');
 
 export default function AnalyzePage() {
 	const navigate = useNavigate();
@@ -25,8 +28,8 @@ export default function AnalyzePage() {
 			setErrorMessage('Choose a JPG, PNG, or WEBP image.');
 			return;
 		}
-		if (file.size > 10 * 1024 * 1024) {
-			setErrorMessage('Choose an image that is 10 MB or smaller.');
+		if (file.size > 3 * 1024 * 1024) {
+			setErrorMessage('Choose an image that is 3 MB or smaller.');
 			return;
 		}
 
@@ -37,6 +40,10 @@ export default function AnalyzePage() {
 
 	const handleAnalyze = async () => {
 		if (!selectedImage || isAnalyzing) return;
+		if (!apiBaseUrl && !import.meta.env.DEV) {
+			setErrorMessage('The API URL is not configured. Set VITE_API_BASE_URL and redeploy the frontend.');
+			return;
+		}
 		setIsAnalyzing(true);
 		setErrorMessage('');
 
@@ -110,7 +117,7 @@ export default function AnalyzePage() {
 				<div className="grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
 					<section className="rounded-2xl border border-[#e3eaf1] bg-white p-5 shadow-[0_6px_20px_rgba(25,53,90,0.05)] sm:p-7">
 						<div className="mb-5 flex items-center justify-between">
-							<div><h2 className="text-lg font-bold text-[#182440]">Upload skin image</h2><p className="mt-1 text-xs text-[#69758a]">JPG, PNG, or WEBP up to 10 MB</p></div>
+							<div><h2 className="text-lg font-bold text-[#182440]">Upload skin image</h2><p className="mt-1 text-xs text-[#69758a]">JPG, PNG, or WEBP up to 3 MB</p></div>
 							<span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e4f7f5] text-xl text-[#147b82]">↥</span>
 						</div>
 

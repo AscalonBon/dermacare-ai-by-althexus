@@ -3,7 +3,10 @@ import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
 
 const homePath = import.meta.env.BASE_URL;
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const apiBaseUrl = (
+	import.meta.env.VITE_API_BASE_URL ||
+	(import.meta.env.DEV ? 'http://localhost:5000' : '')
+).replace(/\/$/, '');
 
 function ReportCard({ children, className = '' }) {
 	return <section className={`rounded-2xl border border-[#e3eaf1] bg-white p-5 shadow-[0_6px_20px_rgba(25,53,90,0.05)] sm:p-6 ${className}`}>{children}</section>;
