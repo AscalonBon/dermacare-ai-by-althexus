@@ -465,10 +465,10 @@ app.use((error, req, res, next) => {
         : status >= 500
           ? 'INTERNAL_SERVER_ERROR'
           : 'REQUEST_ERROR';
-  const message = status >= 500
-    ? 'An unexpected server error occurred.'
-    : error instanceof ApiError
-      ? error.message
+  const message = error instanceof ApiError
+    ? error.message
+    : status >= 500
+      ? 'An unexpected server error occurred.'
       : status === 413
         ? 'Request body exceeds the allowed size.'
         : status === 400

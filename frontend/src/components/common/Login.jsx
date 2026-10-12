@@ -64,7 +64,12 @@ const Login = () => {
       });
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.error?.message || 'Unable to authenticate. Please try again.');
+        const message = result.error?.message || 'Unable to authenticate. Please try again.';
+        const requestId = result.error?.requestId;
+        const reference = result.error?.code === 'INTERNAL_SERVER_ERROR' && requestId
+          ? ` (Reference: ${requestId})`
+          : '';
+        throw new Error(`${message}${reference}`);
       }
       if (!result.token || !result.user?.id) {
         throw new Error('The server returned an invalid authentication response.');
