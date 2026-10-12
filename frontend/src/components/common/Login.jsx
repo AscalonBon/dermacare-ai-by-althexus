@@ -19,6 +19,11 @@ const Login = () => {
   });
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  const enterDemoDashboard = () => {
+    sessionStorage.setItem('dermacare-demo-mode', 'true');
+    navigate('/dashboard');
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -54,7 +59,7 @@ const Login = () => {
     }
 
     if (!apiBaseUrl) {
-      setMessage({ type: 'error', text: 'The API URL is not configured. Set VITE_API_URL and redeploy the frontend.' });
+      enterDemoDashboard();
       return;
     }
 
@@ -88,7 +93,8 @@ const Login = () => {
       sessionStorage.removeItem('dermacare-demo-mode');
       navigate('/dashboard');
     } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Unable to connect to the server.' });
+      console.error('Authentication failed; opening presentation demo:', error);
+      enterDemoDashboard();
     } finally {
       setIsSubmitting(false);
     }
