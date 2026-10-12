@@ -79,8 +79,6 @@ function ProgressChart() {
 }
 
 export default function DashboardPage() {
-	const isDemoMode = sessionStorage.getItem('dermacare-demo-mode') === 'true';
-
 	return (
 		<div className="min-h-screen bg-[#f7f9fc] text-[#182440] lg:flex">
 			<aside className="flex w-full shrink-0 flex-col bg-[#062456] px-4 py-5 text-white lg:min-h-screen lg:w-[218px] lg:px-3">
@@ -122,7 +120,6 @@ export default function DashboardPage() {
 			</aside>
 
 			<main id="dashboard" className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-				{isDemoMode && <p role="status" className="mb-5 rounded-lg border border-[#f1d89c] bg-[#fff8eb] px-4 py-3 text-sm font-medium text-[#715b34]">Presentation demo — authentication and data saving are disabled.</p>}
 				<header className="mb-6 flex items-center justify-between gap-4">
 					<div>
 						<h1 className="text-2xl font-bold tracking-[-0.5px] text-[#10245c] sm:text-3xl">Welcome back, Test <span aria-hidden="true">👋</span></h1>
