@@ -14,6 +14,8 @@ export function App() {
   const [contents, setContents] = useState([]);
 
   useEffect(() => {
+    if (window.location.pathname.replace(/\/+$/, "").includes("/admin")) return;
+
     const loadPublishedContent = async () => {
       try {
         const response = await fetch(

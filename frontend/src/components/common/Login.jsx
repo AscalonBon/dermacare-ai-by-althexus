@@ -1,14 +1,40 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const apiBaseUrl = (
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? 'http://localhost:5000' : '')
 ).replace(/\/$/, '');
-const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const googleScriptUrl = 'https://accounts.google.com/gsi/client';
+let googleScriptPromise;
+
+function loadGoogleIdentity() {
+  if (window.google?.accounts?.id) return Promise.resolve(window.google);
+  if (!googleScriptPromise) {
+    googleScriptPromise = new Promise((resolve, reject) => {
+      let script = document.querySelector(`script[src="${googleScriptUrl}"]`);
+      if (!script) {
+        script = document.createElement('script');
+        script.src = googleScriptUrl;
+        script.async = true;
+        script.defer = true;
+      }
+
+      script.addEventListener('load', () => resolve(window.google), { once: true });
+      script.addEventListener('error', () => reject(new Error('Google sign-in could not be loaded.')), { once: true });
+      if (!script.isConnected) document.head.appendChild(script);
+    }).catch((error) => {
+      googleScriptPromise = null;
+      throw error;
+    });
+  }
+  return googleScriptPromise;
+}
 
 const Login = () => {
   const navigate = useNavigate();
+  const googleButtonRef = useRef(null);
   const [isLogin, setIsLogin] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -19,10 +45,72 @@ const Login = () => {
   });
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const enterDemoDashboard = () => {
-    sessionStorage.setItem('dermacare-demo-mode', 'true');
+  const saveAuthentication = useCallback((result) => {
+    if (!result.token || !result.user?.id) {
+      throw new Error('The server returned an invalid authentication response.');
+    }
+    localStorage.setItem('dermacare-auth-token', result.token);
+    localStorage.setItem('dermacare-user', JSON.stringify(result.user));
+    localStorage.setItem('dermacare-user-id', result.user.id);
     navigate('/dashboard');
-  };
+  }, [navigate]);
+
+  const handleGoogleCredential = useCallback(async (credential) => {
+    setMessage({ type: '', text: '' });
+    if (!apiBaseUrl) {
+      setMessage({ type: 'error', text: 'The API URL is not configured. Set VITE_API_URL for the frontend deployment.' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.error?.message || 'Google sign-in failed. Please try again.');
+      }
+      saveAuthentication(result);
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Google sign-in failed. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [saveAuthentication]);
+
+  useEffect(() => {
+    if (!googleClientId) return undefined;
+    let isMounted = true;
+
+    loadGoogleIdentity()
+      .then((google) => {
+        if (!isMounted || !googleButtonRef.current) return;
+        google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: ({ credential }) => {
+            if (credential) handleGoogleCredential(credential);
+            else setMessage({ type: 'error', text: 'Google did not return a sign-in credential.' });
+          },
+        });
+        google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          shape: 'rectangular',
+          text: 'continue_with',
+          width: 320,
+        });
+      })
+      .catch((error) => {
+        if (isMounted) setMessage({ type: 'error', text: error.message });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [handleGoogleCredential]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -52,14 +140,11 @@ const Login = () => {
       }
     }
 
-    if (demoMode) {
-      sessionStorage.setItem('dermacare-demo-mode', 'true');
-      navigate('/dashboard');
-      return;
-    }
-
     if (!apiBaseUrl) {
-      enterDemoDashboard();
+      setMessage({
+        type: 'error',
+        text: 'The API URL is not configured. Set VITE_API_URL for the frontend deployment.',
+      });
       return;
     }
 
@@ -83,18 +168,12 @@ const Login = () => {
           : '';
         throw new Error(`${message}${reference}`);
       }
-      if (!result.token || !result.user?.id) {
-        throw new Error('The server returned an invalid authentication response.');
-      }
-
-      localStorage.setItem('dermacare-auth-token', result.token);
-      localStorage.setItem('dermacare-user', JSON.stringify(result.user));
-      localStorage.setItem('dermacare-user-id', result.user.id);
-      sessionStorage.removeItem('dermacare-demo-mode');
-      navigate('/dashboard');
+      saveAuthentication(result);
     } catch (error) {
-      console.error('Authentication failed; opening presentation demo:', error);
-      enterDemoDashboard();
+      setMessage({
+        type: 'error',
+        text: error.message || 'Unable to connect to the server.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -120,11 +199,6 @@ const Login = () => {
           <p className="text-sm text-[#5F6D84] m-0">
             {isLogin ? 'Welcome back' : 'Create your account'}
           </p>
-          {demoMode && (
-            <p role="status" className="mt-3 rounded-lg bg-[#fff8eb] px-3 py-2 text-xs leading-5 text-[#715b34]">
-              Presentation demo mode is enabled. Submitting this form opens the dashboard without contacting the server or creating an account.
-            </p>
-          )}
         </div>
 
         {/* Form */}
@@ -225,6 +299,21 @@ const Login = () => {
             {isSubmitting ? 'Please wait…' : isLogin ? 'Login' : 'Create Account'}
           </button>
         </form>
+
+        <div className="mt-5">
+          <div className="mb-4 flex items-center gap-3 text-xs text-[#8995aa]">
+            <span className="h-px flex-1 bg-[#e2e7ef]" />
+            <span>OR</span>
+            <span className="h-px flex-1 bg-[#e2e7ef]" />
+          </div>
+          {googleClientId ? (
+            <div ref={googleButtonRef} className="flex min-h-10 justify-center" />
+          ) : (
+            <p className="text-center text-xs leading-5 text-[#69758A]">
+              Google sign-in is unavailable until <code>VITE_GOOGLE_CLIENT_ID</code> is configured.
+            </p>
+          )}
+        </div>
 
         {/* Switch Mode */}
         <div className="text-center mt-5 text-sm text-[#5F6D84]">

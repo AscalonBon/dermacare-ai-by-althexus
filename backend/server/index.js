@@ -4,13 +4,16 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const crypto = require('node:crypto');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('./models/User');
 const Image = require('./models/image');
 const SkinAnalysis = require('./models/SkinAnalysis');
 const Report = require('./models/Report');
 const connectDB = require('./lib/mongodb');
 const {
+  createAdminToken,
   createAuthToken,
+  getAdminFromToken,
   getAuthUserId,
   getTokenSecret,
   hashPassword,
@@ -19,6 +22,7 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const googleOAuthClient = new OAuth2Client();
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_ORIGINS = new Set([
@@ -80,7 +84,12 @@ async function requireDatabase(req, res, next) {
     await connectDB();
     next();
   } catch (error) {
-    next(error);
+    console.error(`[${res.locals.requestId}] MongoDB request connection failed`, error);
+    next(new ApiError(
+      503,
+      'DATABASE_UNAVAILABLE',
+      'MongoDB is unavailable. Check the backend MONGO_URI and database network access.'
+    ));
   }
 }
 
@@ -154,22 +163,11 @@ async function loginUser(req, res) {
 }
 
 function authenticateAdmin(req, res, next) {
-  const configuredKey = process.env.ADMIN_API_KEY;
-  if (!configuredKey) {
-    return next(new ApiError(503, 'ADMIN_AUTH_NOT_CONFIGURED', 'Admin API authentication is not configured.'));
-  }
-
   const authorization = req.get('authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (!match) {
-    return next(new ApiError(401, 'UNAUTHORIZED', 'A valid admin bearer token is required.'));
-  }
-
-  const expected = Buffer.from(configuredKey);
-  const actual = Buffer.from(match[1]);
-  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
-    return next(new ApiError(401, 'UNAUTHORIZED', 'A valid admin bearer token is required.'));
-  }
+  const admin = match ? getAdminFromToken(match[1]) : null;
+  if (!admin) return next(new ApiError(401, 'UNAUTHORIZED', 'Sign in with an admin account to continue.'));
+  req.admin = admin;
   next();
 }
 
@@ -179,6 +177,72 @@ function authenticateAdmin(req, res, next) {
 app.use('/api/auth', requireDatabase);
 app.post('/api/auth/register', registerUser);
 app.post('/api/auth/login', loginUser);
+app.post('/api/auth/google', async (req, res, next) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const idToken = req.body?.credential;
+  if (!clientId) {
+    return next(new ApiError(503, 'GOOGLE_AUTH_NOT_CONFIGURED', 'Google sign-in is not configured on the server.'));
+  }
+  if (typeof idToken !== 'string' || !idToken || idToken.length > 10_000) {
+    return next(new ApiError(400, 'INVALID_GOOGLE_CREDENTIAL', 'A valid Google sign-in credential is required.'));
+  }
+
+  try {
+    getTokenSecret();
+    let ticket;
+    try {
+      ticket = await googleOAuthClient.verifyIdToken({ idToken, audience: clientId });
+    } catch {
+      throw new ApiError(401, 'INVALID_GOOGLE_CREDENTIAL', 'Google sign-in could not be verified. Try again.');
+    }
+    const payload = ticket.getPayload();
+    if (
+      !payload ||
+      typeof payload.sub !== 'string' ||
+      typeof payload.email !== 'string' ||
+      payload.email_verified !== true
+    ) {
+      throw new ApiError(401, 'INVALID_GOOGLE_CREDENTIAL', 'Google did not verify this email address.');
+    }
+
+    const email = payload.email.trim().toLowerCase();
+    let user = await User.findOne({ googleId: payload.sub });
+    if (!user) {
+      user = await User.findOne({ email });
+      if (user?.googleId && user.googleId !== payload.sub) {
+        throw new ApiError(409, 'GOOGLE_ACCOUNT_CONFLICT', 'This email is linked to a different Google account.');
+      }
+      if (!user) {
+        user = new User({
+          name: typeof payload.name === 'string' && payload.name.trim()
+            ? payload.name.trim().slice(0, 100)
+            : email.split('@')[0],
+          email,
+          googleId: payload.sub,
+        });
+      } else {
+        user.googleId = payload.sub;
+      }
+      await user.save();
+    }
+
+    if (!user.isActive) {
+      throw new ApiError(403, 'ACCOUNT_DISABLED', 'This account is unavailable.');
+    }
+
+    res.json({ user: publicUser(user), token: createAuthToken(user._id.toString()) });
+  } catch (error) {
+    if (error instanceof ApiError) return next(error);
+    if (error.code === 11000) {
+      return next(new ApiError(409, 'GOOGLE_ACCOUNT_CONFLICT', 'This Google account could not be linked. Contact support.'));
+    }
+    if (error.message?.includes('AUTH_TOKEN_SECRET')) {
+      return next(new ApiError(503, 'AUTH_NOT_CONFIGURED', error.message));
+    }
+    console.error(`[${res.locals.requestId}] Google sign-in failed`, error);
+    next(error);
+  }
+});
 app.get('/api/auth/me', requireUserAuthentication, async (req, res, next) => {
   try {
     const user = await User.findById(req.authenticatedUserId);
@@ -189,6 +253,34 @@ app.get('/api/auth/me', requireUserAuthentication, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.post('/api/admin/login', (req, res) => {
+  const configuredEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const configuredPassword = process.env.ADMIN_PASSWORD;
+  const tokenSecret = process.env.ADMIN_TOKEN_SECRET;
+  if (!configuredEmail || !configuredPassword || !tokenSecret || Buffer.byteLength(tokenSecret) < 32) {
+    return res.status(503).json({
+      error: 'Admin login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD, and a 32-character ADMIN_TOKEN_SECRET in the backend environment.',
+    });
+  }
+
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const expectedEmail = Buffer.from(configuredEmail);
+  const suppliedEmail = Buffer.from(email);
+  const expectedPassword = Buffer.from(configuredPassword);
+  const suppliedPassword = Buffer.from(password);
+  const emailMatches = expectedEmail.length === suppliedEmail.length
+    && crypto.timingSafeEqual(expectedEmail, suppliedEmail);
+  const passwordMatches = expectedPassword.length === suppliedPassword.length
+    && crypto.timingSafeEqual(expectedPassword, suppliedPassword);
+  if (!emailMatches || !passwordMatches) {
+    return res.status(401).json({ error: 'Invalid email or password.' });
+  }
+
+  const admin = { name: process.env.ADMIN_NAME?.trim() || 'Administrator', email: configuredEmail };
+  res.json({ admin, token: createAdminToken(admin) });
 });
 
 // ===============================
@@ -219,6 +311,24 @@ app.post(
 // Get All Skin Analyses - Admin Only
 // ===============================
 app.use('/api/admin', authenticateAdmin, requireDatabase);
+app.get('/api/admin/dashboard', (req, res) => {
+  res.json({ admin: req.admin });
+});
+app.get('/api/admin/stats', async (req, res) => {
+  const activeSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [totalUsers, totalAnalyses, activeUsers, recentUsers] = await Promise.all([
+    User.countDocuments(),
+    SkinAnalysis.countDocuments(),
+    User.countDocuments({ isActive: true, lastActiveAt: { $gte: activeSince } }),
+    User.find()
+      .select('name email isActive createdAt')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+  ]);
+
+  res.json({ totalUsers, totalAnalyses, activeUsers, recentUsers });
+});
 app.get(
   '/api/admin/skin-analysis',
   async (req, res) => {

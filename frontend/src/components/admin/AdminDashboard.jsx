@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : "")
+).replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
 
 const MENU_ROUTES = {
@@ -154,6 +157,7 @@ function AdminDashboard() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeMenu, setActiveMenu] = useState("Dashboard");
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -185,8 +189,14 @@ function AdminDashboard() {
         });
 
         if (!response.ok) {
-          clearSessionAndExit();
-          return;
+          if (response.status === 401) {
+            localStorage.removeItem("adminToken");
+            localStorage.removeItem("adminData");
+            window.location.href = `${BASE}admin`;
+            return;
+          }
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.error?.message || errorData?.error || "Unable to load the admin dashboard.");
         }
 
         const data = await response.json();
@@ -197,12 +207,16 @@ function AdminDashboard() {
           headers,
         });
 
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setStats((prev) => ({ ...prev, ...statsData }));
+        if (!statsResponse.ok) {
+          const errorData = await statsResponse.json().catch(() => null);
+          throw new Error(errorData?.error?.message || errorData?.error || "Unable to load dashboard statistics.");
         }
+
+        const statsData = await statsResponse.json();
+        setStats((prev) => ({ ...prev, ...statsData }));
       } catch (error) {
         console.error("Dashboard error:", error);
+        setLoadError(error.message || "Unable to load the admin dashboard.");
       } finally {
         setLoading(false);
       }
@@ -223,6 +237,31 @@ function AdminDashboard() {
           <p className="font-semibold text-[#173a38]">
             Loading Admin Dashboard...
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f5f8fc] px-5">
+        <div role="alert" className="w-full max-w-lg rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-xl font-bold text-[#172033]">Dashboard could not load</h1>
+          <p className="mt-3 text-sm text-[#69767e]">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 rounded-lg bg-[#123a91] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0b2c78]"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="ml-3 mt-6 rounded-lg border border-[#d9e1ec] px-5 py-3 text-sm font-semibold text-[#25304a] hover:bg-gray-50"
+          >
+            Return to admin login
+          </button>
         </div>
       </div>
     );
