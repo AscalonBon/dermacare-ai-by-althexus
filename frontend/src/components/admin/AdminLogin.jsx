@@ -1,6 +1,11 @@
 import { useState } from "react";
 import logo from "../../assets/admin-logo.png";
 
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : "")
+).replace(/\/$/, "");
+
 function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,19 +20,15 @@ function AdminLogin() {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/admin/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: email.trim().toLowerCase(),
-            password,
-          }),
-        }
-      );
+      if (!API_BASE) {
+        throw new Error("The API URL is not configured. Set VITE_API_URL for the frontend.");
+      }
+
+      const response = await fetch(`${API_BASE}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
 
       const responseText = await response.text();
       console.log("Login HTTP status:", response.status);
@@ -44,11 +45,7 @@ function AdminLogin() {
       }
 
       if (!response.ok) {
-        throw new Error(
-          data.error ||
-            data.message ||
-            `Login failed with status ${response.status}.`
-        );
+        throw new Error(typeof data.error === "string" ? data.error : data.error?.message || "Invalid email or password");
       }
 
       if (!data.token || !data.admin) {

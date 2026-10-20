@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import AdminLayout, { AdminIcon } from "./AdminLayout";
+import AdminLayout, {
+  AdminIcon,
+  getErrorMessage,
+  redirectToLogin,
+} from "./AdminLayout";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : "")
+).replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
 
 const goTo = (route) => {
@@ -31,19 +38,30 @@ function AdminDashboard() {
           fetch(`${API_BASE}/api/admin/users`, { headers }),
         ]);
 
-        if (statsResponse.status === 401 || usersResponse.status === 401) {
-          localStorage.removeItem("adminToken");
-          localStorage.removeItem("adminData");
-          goTo("admin");
+        if (
+          [statsResponse.status, usersResponse.status].some(
+            (status) => status === 401 || status === 403
+          )
+        ) {
+          redirectToLogin();
           return;
         }
 
-        const statsData = statsResponse.ok ? await statsResponse.json() : {};
-        const usersData = usersResponse.ok ? await usersResponse.json() : {};
+        if (!statsResponse.ok) {
+          const errorData = await statsResponse.json().catch(() => null);
+          throw new Error(
+            getErrorMessage(errorData, "Unable to load dashboard statistics.")
+          );
+        }
+
+        const statsData = await statsResponse.json();
+        const usersData = usersResponse.ok
+          ? await usersResponse.json().catch(() => ({}))
+          : {};
         const users = Array.isArray(usersData.users) ? usersData.users : [];
 
         const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-        const activeUsers = users.filter((user) => {
+        const computedActive = users.filter((user) => {
           if (user.isActive === false) return false;
           const last = user.lastActiveAt || user.updatedAt || user.createdAt;
           return last ? new Date(last).getTime() >= thirtyDaysAgo : false;
@@ -52,16 +70,16 @@ function AdminDashboard() {
         setStats({
           totalUsers: statsData.totalUsers ?? users.length,
           totalAnalyses: statsData.totalAnalyses ?? 0,
-          activeUsers,
-          recentUsers: users.slice(0, 5),
+          activeUsers: statsData.activeUsers ?? computedActive,
+          recentUsers: statsData.recentUsers ?? users.slice(0, 5),
         });
 
-        if (!statsResponse.ok || !usersResponse.ok) {
+        if (!usersResponse.ok) {
           setError("Some dashboard data could not be loaded.");
         }
       } catch (err) {
         console.error("Dashboard error:", err);
-        setError("Unable to reach the server. Is the backend running?");
+        setError(err.message || "Unable to load the admin dashboard.");
       } finally {
         setLoading(false);
       }
@@ -101,8 +119,18 @@ function AdminDashboard() {
       </div>
 
       {error && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
+        <div
+          role="alert"
+          className="mb-6 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 sm:self-auto"
+          >
+            Try again
+          </button>
         </div>
       )}
 

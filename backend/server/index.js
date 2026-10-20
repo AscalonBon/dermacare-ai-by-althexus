@@ -7,7 +7,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const crypto = require('node:crypto');
-
+const { OAuth2Client } = require('google-auth-library');
 const User = require('./models/User');
 const Image = require('./models/image');
 const SkinAnalysis = require('./models/SkinAnalysis');
@@ -21,7 +21,27 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const connectDB = require('./lib/mongodb');
+const {
+  createAdminToken,
+  createAuthToken,
+  getAdminFromToken,
+  getAuthUserId,
+  getTokenSecret,
+  hashPassword,
+  verifyPassword,
+} = require('./lib/auth');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const googleOAuthClient = new OAuth2Client();
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_ORIGINS = new Set([
+  'https://dermacare-ai-by-althexus.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]);
 
 function matchesImageType(imageBytes, contentType) {
   if (contentType === 'image/jpeg') {
@@ -61,13 +81,17 @@ const asyncHandler = (handler) => (req, res, next) =>
 // ===============================
 // Middleware
 // ===============================
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || ALLOWED_ORIGINS.has(origin));
+  },
+}));
 app.use((req, res, next) => {
   res.locals.requestId = crypto.randomUUID();
   res.set('X-Request-Id', res.locals.requestId);
   next();
 });
-app.use(express.json({ limit: '14mb' }));
+app.use(express.json({ limit: '4200kb' }));
 
 // Admin routes require a valid JWT with role: "admin".
 const authenticateAdmin = (req, res, next) => {
@@ -188,9 +212,6 @@ app.post('/api/users', asyncHandler(async (req, res) => {
     const savedUser = await user.save();
     return res.status(201).json(savedUser);
   } catch (error) {
-    if (error.name === 'ValidationError' || error.name === 'CastError') {
-      throw new ApiError(400, 'INVALID_USER', error.message);
-    }
     if (error.code === 11000) {
       throw new ApiError(409, 'USER_ALREADY_EXISTS',
         'A user with this email already exists.');
@@ -401,10 +422,66 @@ app.get('/api/admin/profile', authenticateAdmin, asyncHandler(async (req, res) =
   const admin = await Admin.findById(req.admin.id);
   if (!admin) {
     throw new ApiError(404, 'ADMIN_NOT_FOUND', 'Admin account not found.');
+// ===============================
+// Get All Skin Analyses - Admin Only
+// ===============================
+app.use('/api/admin', authenticateAdmin, requireDatabase);
+app.get('/api/admin/dashboard', (req, res) => {
+  res.json({ admin: req.admin });
+});
+app.get('/api/admin/stats', async (req, res) => {
+  const activeSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [totalUsers, totalAnalyses, activeUsers, recentUsers] = await Promise.all([
+    User.countDocuments(),
+    SkinAnalysis.countDocuments(),
+    User.countDocuments({ isActive: true, lastActiveAt: { $gte: activeSince } }),
+    User.find()
+      .select('name email isActive createdAt')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+  ]);
+
+  res.json({ totalUsers, totalAnalyses, activeUsers, recentUsers });
+});
+app.get(
+  '/api/admin/skin-analysis',
+  async (req, res) => {
+    try {
+      const analyses =
+        await SkinAnalysis.find()
+          .populate('user', 'name email')
+          .sort({ createdAt: -1 });
+
+      res.json({
+        totalAnalyses: analyses.length,
+        analyses
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        error: error.message
+      });
+    }
   }
 
   return res.json({ admin: formatAdmin(admin) });
 }));
+// ===============================
+// Create Report - Admin Only
+// ===============================
+app.post(
+  '/api/admin/reports',
+  async (req, res) => {
+    try {
+      const {
+        user,
+        skinAnalysis,
+        title,
+        summary,
+        recommendations,
+        status
+      } = req.body;
 
 app.put('/api/admin/profile', authenticateAdmin, asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.admin.id)) {
@@ -413,6 +490,21 @@ app.put('/api/admin/profile', authenticateAdmin, asyncHandler(async (req, res) =
 
   const { name, email, password } = req.body || {};
   const updates = {};
+// ===============================
+// Get All Reports - Admin Only
+// ===============================
+app.get(
+  '/api/admin/reports',
+  async (req, res) => {
+    try {
+      const reports =
+        await Report.find()
+          .populate('user', 'name email')
+          .populate(
+            'skinAnalysis',
+            'skinType analysisResult'
+          )
+          .sort({ createdAt: -1 });
 
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) {
@@ -425,6 +517,36 @@ app.put('/api/admin/profile', authenticateAdmin, asyncHandler(async (req, res) =
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       throw new ApiError(400, 'INVALID_EMAIL', 'Enter a valid email address.');
+// ===============================
+// Get Single Report - Admin Only
+// ===============================
+app.get(
+  '/api/admin/reports/:id',
+  async (req, res) => {
+    try {
+      const report =
+        await Report.findById(req.params.id)
+          .populate(
+            'user',
+            'name email'
+          )
+          .populate(
+            'skinAnalysis',
+            'skinType analysisResult recommendations'
+          );
+
+      if (!report) {
+        return res.status(404).json({
+          error: 'Report not found'
+        });
+      }
+
+      res.json(report);
+
+    } catch (error) {
+      res.status(500).json({
+        error: error.message
+      });
     }
 
     const duplicate = await Admin.findOne({
@@ -470,13 +592,9 @@ app.get('/api/message', (req, res) => {
 
 // ===============================
 // Image API
-// ===============================
-app.post('/api/images', asyncHandler(async (req, res) => {
-  const { userId, fileName, contentType, imageData } = req.body ?? {};
-
-  if (typeof userId !== 'string' || !userId.trim() || userId.length > 128) {
-    throw new ApiError(400, 'INVALID_USER_ID', 'A valid userId is required.');
-  }
+app.use('/api/images', requireDatabase, requireUserAuthentication);
+app.post('/api/images', async (req, res) => {
+  const { fileName, contentType, imageData } = req.body ?? {};
   if (typeof fileName !== 'string' || !fileName.trim() || fileName.length > 255) {
     throw new ApiError(400, 'INVALID_FILE_NAME', 'A valid fileName is required.');
   }
@@ -490,14 +608,14 @@ app.post('/api/images', asyncHandler(async (req, res) => {
 
   const imageBytes = Buffer.from(imageData, 'base64');
   if (imageBytes.length === 0 || imageBytes.length > MAX_IMAGE_BYTES) {
-    throw new ApiError(413, 'IMAGE_SIZE_LIMIT', 'Image must be 10 MB or smaller.');
+    throw new ApiError(413, 'IMAGE_SIZE_LIMIT', 'Image must be 3 MB or smaller.');
   }
   if (!matchesImageType(imageBytes, contentType)) {
     throw new ApiError(400, 'INVALID_IMAGE', 'The image content does not match its declared file type.');
   }
 
   const savedImage = await new Image({
-    userId: userId.trim(),
+    userId: req.authenticatedUserId,
     fileName: fileName.trim(),
     contentType,
     imageData: imageBytes
@@ -516,6 +634,9 @@ app.get('/api/images/:imageId', asyncHandler(async (req, res) => {
 
   const image = await Image.findById(req.params.imageId).select('contentType imageData');
   if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  if (image.userId !== req.authenticatedUserId) {
+    throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  }
 
   res.set('Content-Type', image.contentType);
   res.set('Cache-Control', 'private, no-store');
@@ -529,8 +650,14 @@ app.post('/api/images/:imageId/analyze', asyncHandler(async (req, res) => {
 
   const image = await Image.findById(req.params.imageId).select('contentType imageData');
   if (!image) throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  if (image.userId !== req.authenticatedUserId) {
+    throw new ApiError(404, 'IMAGE_NOT_FOUND', 'Image not found.');
+  }
 
-  const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000';
+  if (!process.env.ML_SERVICE_URL) {
+    throw new ApiError(503, 'ML_SERVICE_NOT_CONFIGURED', 'Image analysis service is not configured.');
+  }
+  const mlServiceUrl = process.env.ML_SERVICE_URL;
   let response;
 
   try {
@@ -590,11 +717,10 @@ app.use((error, req, res, next) => {
         : status >= 500
           ? 'INTERNAL_SERVER_ERROR'
           : 'REQUEST_ERROR';
-
-  const message = status >= 500
-    ? 'An unexpected server error occurred.'
-    : error instanceof ApiError
-      ? error.message
+  const message = error instanceof ApiError
+    ? error.message
+    : status >= 500
+      ? 'An unexpected server error occurred.'
       : status === 413
         ? 'Request body exceeds the allowed size.'
         : status === 400
