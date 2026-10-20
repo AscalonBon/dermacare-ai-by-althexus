@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
 import skinImage from '../assets/women-image.png';
@@ -79,6 +80,17 @@ function ProgressChart() {
 }
 
 export default function DashboardPage() {
+	const [userName] = useState(() => {
+		try {
+			const user = JSON.parse(localStorage.getItem('dermacare-user') || 'null');
+			return typeof user?.name === 'string' && user.name.trim()
+				? user.name.trim()
+				: 'Test';
+		} catch {
+			return 'Test';
+		}
+	});
+
 	return (
 		<div className="min-h-screen bg-[#f7f9fc] text-[#182440] lg:flex">
 			<aside className="flex w-full shrink-0 flex-col bg-[#062456] px-4 py-5 text-white lg:min-h-screen lg:w-[218px] lg:px-3">
@@ -122,12 +134,12 @@ export default function DashboardPage() {
 			<main id="dashboard" className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
 				<header className="mb-6 flex items-center justify-between gap-4">
 					<div>
-						<h1 className="text-2xl font-bold tracking-[-0.5px] text-[#10245c] sm:text-3xl">Welcome back, Priya <span aria-hidden="true">👋</span></h1>
+						<h1 className="text-2xl font-bold tracking-[-0.5px] text-[#10245c] sm:text-3xl">Welcome back, {userName} <span aria-hidden="true">👋</span></h1>
 						<p className="mt-1 text-sm text-[#69758a]">Here&apos;s your skin health overview.</p>
 					</div>
 					<div className="flex items-center gap-4">
 						<button type="button" aria-label="View notifications" className="relative hidden text-2xl text-[#182440] sm:block">♧<span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#bd3f4d] text-[9px] text-white">3</span></button>
-						<button type="button" aria-label="Open profile menu" className="flex items-center gap-2"><img src={skinImage} alt="Priya profile" className="h-10 w-10 rounded-full object-cover object-[48%_35%]" /><span className="text-sm text-[#69758a]">⌄</span></button>
+						<button type="button" aria-label="Open profile menu" className="flex items-center gap-2"><img src={skinImage} alt={`${userName} profile`} className="h-10 w-10 rounded-full object-cover object-[48%_35%]" /><span className="text-sm text-[#69758a]">⌄</span></button>
 					</div>
 				</header>
 

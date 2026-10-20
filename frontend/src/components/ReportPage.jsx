@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
 
 const homePath = import.meta.env.BASE_URL;
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const apiBaseUrl = (
+	import.meta.env.VITE_API_URL ||
+	(import.meta.env.DEV ? 'http://localhost:5000' : '')
+).replace(/\/$/, '');
 
 function ReportCard({ children, className = '' }) {
 	return <section className={`rounded-2xl border border-[#e3eaf1] bg-white p-5 shadow-[0_6px_20px_rgba(25,53,90,0.05)] sm:p-6 ${className}`}>{children}</section>;
@@ -21,6 +24,38 @@ export default function ReportPage() {
 			return null;
 		}
 	});
+	const [imageUrl, setImageUrl] = useState('');
+	const [imageError, setImageError] = useState(() => (
+		analysis?.imageUrl && !localStorage.getItem('dermacare-auth-token')
+			? 'Sign in again to view this image.'
+			: ''
+	));
+
+	useEffect(() => {
+		if (!analysis?.imageUrl) return undefined;
+		const token = localStorage.getItem('dermacare-auth-token');
+		if (!token) return undefined;
+
+		let objectUrl;
+		const controller = new AbortController();
+		fetch(`${apiBaseUrl}${analysis.imageUrl}`, {
+			headers: { Authorization: `Bearer ${token}` },
+			signal: controller.signal,
+		})
+			.then(async (response) => {
+				if (!response.ok) throw new Error('The uploaded image could not be loaded.');
+				objectUrl = URL.createObjectURL(await response.blob());
+				setImageUrl(objectUrl);
+			})
+			.catch((error) => {
+				if (error.name !== 'AbortError') setImageError(error.message);
+			});
+
+		return () => {
+			controller.abort();
+			if (objectUrl) URL.revokeObjectURL(objectUrl);
+		};
+	}, [analysis]);
 
 	return (
 		<div className="min-h-screen bg-[#f7f9fc] text-[#182440]">
@@ -41,7 +76,7 @@ export default function ReportPage() {
 						<div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
 							<ReportCard>
 								<h2 className="text-base font-bold">Uploaded image</h2>
-								<img src={`${apiBaseUrl}${analysis.imageUrl}`} alt="Image used for analysis" className="mt-4 max-h-[420px] w-full rounded-xl object-contain" />
+								{imageUrl ? <img src={imageUrl} alt="Image used for analysis" className="mt-4 max-h-[420px] w-full rounded-xl object-contain" /> : <p role={imageError ? 'alert' : undefined} className="mt-4 rounded-xl bg-[#f5f9fb] p-4 text-sm text-[#69758a]">{imageError || 'Loading uploaded image…'}</p>}
 								<p className="mt-3 text-xs text-[#69758a]">{analysis.image?.width} × {analysis.image?.height} pixels</p>
 							</ReportCard>
 							<ReportCard>

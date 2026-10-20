@@ -16,6 +16,17 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    passwordHash: {
+      type: String,
+      select: false,
+    },
+
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+
     age: {
       type: Number,
       min: 1,
@@ -48,6 +59,12 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+userSchema.pre("validate", function () {
+  if (!this.passwordHash && !this.googleId) {
+    this.invalidate("passwordHash", "An account requires a password or a linked Google account.");
+  }
+});
 
 const User = mongoose.model("User", userSchema);
 
