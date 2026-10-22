@@ -15,6 +15,7 @@ function AdminLogin() {
   const handleLogin = async (e) => {
     e.preventDefault();
 
+    console.log("Admin login form submitted");
     setError("");
     setLoading(true);
 
@@ -30,14 +31,16 @@ function AdminLogin() {
       });
 
       const responseText = await response.text();
+      console.log("Login HTTP status:", response.status);
+      console.log("Login response body:", responseText);
 
-      let data;
+      let data = {};
 
       try {
-        data = JSON.parse(responseText);
+        data = responseText ? JSON.parse(responseText) : {};
       } catch {
         throw new Error(
-          "Backend response is not valid. Please make sure the backend is running on port 5000."
+          "Backend returned an invalid response. Check the backend terminal."
         );
       }
 
@@ -46,32 +49,33 @@ function AdminLogin() {
       }
 
       if (!data.token || !data.admin) {
-        throw new Error("Invalid login response from server.");
+        throw new Error(
+          "Login response is missing the admin token or admin details."
+        );
       }
 
       localStorage.setItem("adminToken", data.token);
-      localStorage.setItem(
-        "adminData",
-        JSON.stringify(data.admin)
+      localStorage.setItem("adminData", JSON.stringify(data.admin));
+
+      window.location.assign(
+        `${import.meta.env.BASE_URL}admin/dashboard`
       );
+    } catch (err) {
+      console.error("Admin login error:", err);
 
-      window.location.href =
-        `${import.meta.env.BASE_URL}admin/dashboard`;
-
-    } catch (error) {
-      console.error("Admin login error:", error);
-      setError(error.message);
+      setError(
+        err instanceof TypeError
+          ? "Backend se connection nahi ho raha. Check karo ki server port 5000 par running hai."
+          : err.message || "Login failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f8fc] flex items-center justify-center px-5">
-
+    <div className="min-h-screen bg-[#f5f8fc] flex items-center justify-center px-5 py-8">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-[0_15px_40px_rgba(35,77,130,0.10)] border border-[#e4eaf2]">
-
-        {/* Logo */}
         <div className="flex justify-center mb-6">
           <img
             src={logo}
@@ -80,60 +84,63 @@ function AdminLogin() {
           />
         </div>
 
-        {/* Heading */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-[#10245c]">
             Admin Login
           </h1>
-
           <p className="mt-2 text-sm text-[#68758d]">
             Sign in to access the DermaCare AI admin dashboard
           </p>
         </div>
 
-        {/* Login Form */}
         <form onSubmit={handleLogin} className="space-y-5">
-
-          {/* Email */}
           <div>
-            <label className="block mb-2 text-sm font-semibold text-[#182440]">
+            <label
+              htmlFor="admin-email"
+              className="block mb-2 text-sm font-semibold text-[#182440]"
+            >
               Email
             </label>
-
             <input
+              id="admin-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter admin email"
+              autoComplete="username"
               required
               className="w-full rounded-lg border border-[#d9e1ec] px-4 py-3 outline-none transition focus:border-[#2878e8] focus:ring-2 focus:ring-[#2878e8]/10"
             />
           </div>
 
-          {/* Password */}
           <div>
-            <label className="block mb-2 text-sm font-semibold text-[#182440]">
+            <label
+              htmlFor="admin-password"
+              className="block mb-2 text-sm font-semibold text-[#182440]"
+            >
               Password
             </label>
-
             <input
+              id="admin-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
+              autoComplete="current-password"
               required
               className="w-full rounded-lg border border-[#d9e1ec] px-4 py-3 outline-none transition focus:border-[#2878e8] focus:ring-2 focus:ring-[#2878e8]/10"
             />
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+            <div
+              role="alert"
+              className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 break-words"
+            >
               {error}
             </div>
           )}
 
-          {/* Button */}
           <button
             type="submit"
             disabled={loading}
@@ -141,13 +148,11 @@ function AdminLogin() {
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
-
         </form>
 
         <p className="mt-6 text-center text-xs text-[#8995aa]">
           DermaCare AI • Admin Portal
         </p>
-
       </div>
     </div>
   );

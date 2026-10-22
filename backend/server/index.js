@@ -1,5 +1,8 @@
 require('dotenv').config();
 
+const dns = require('node:dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -9,6 +12,15 @@ const User = require('./models/User');
 const Image = require('./models/image');
 const SkinAnalysis = require('./models/SkinAnalysis');
 const Report = require('./models/Report');
+const Content = require('./models/Content');
+const Admin = require('./models/Admin');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const connectDB = require('./lib/mongodb');
 const {
   createAdminToken,
@@ -33,16 +45,25 @@ const ALLOWED_ORIGINS = new Set([
 
 function matchesImageType(imageBytes, contentType) {
   if (contentType === 'image/jpeg') {
-    return imageBytes.length >= 3 && imageBytes[0] === 0xff && imageBytes[1] === 0xd8 && imageBytes[2] === 0xff;
+    return imageBytes.length >= 3 &&
+      imageBytes[0] === 0xff &&
+      imageBytes[1] === 0xd8 &&
+      imageBytes[2] === 0xff;
   }
+
   if (contentType === 'image/png') {
-    return imageBytes.length >= 8 && imageBytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    return imageBytes.length >= 8 &&
+      imageBytes.subarray(0, 8).equals(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+      );
   }
+
   if (contentType === 'image/webp') {
-    return imageBytes.length >= 12
-      && imageBytes.toString('ascii', 0, 4) === 'RIFF'
-      && imageBytes.toString('ascii', 8, 12) === 'WEBP';
+    return imageBytes.length >= 12 &&
+      imageBytes.toString('ascii', 0, 4) === 'RIFF' &&
+      imageBytes.toString('ascii', 8, 12) === 'WEBP';
   }
+
   return false;
 }
 
@@ -53,6 +74,9 @@ class ApiError extends Error {
     this.code = code;
   }
 }
+
+const asyncHandler = (handler) => (req, res, next) =>
+  Promise.resolve(handler(req, res, next)).catch(next);
 
 // ===============================
 // Middleware
@@ -69,244 +93,335 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '4200kb' }));
 
-app.get('/api/health', async (req, res) => {
-  try {
-    await connectDB();
-    res.json({ ok: mongoose.connection.readyState === 1 });
-  } catch (error) {
-    console.error(`[${res.locals.requestId}] MongoDB health check failed`, error);
-    res.status(503).json({ ok: false, error: error.message });
-  }
-});
+// Admin routes require a valid JWT with role: "admin".
+const authenticateAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : null;
 
-async function requireDatabase(req, res, next) {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error(`[${res.locals.requestId}] MongoDB request connection failed`, error);
-    next(new ApiError(
-      503,
-      'DATABASE_UNAVAILABLE',
-      'MongoDB is unavailable. Check the backend MONGO_URI and database network access.'
-    ));
-  }
-}
-
-function requireUserAuthentication(req, res, next) {
-  const authorization = req.get('authorization') || '';
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-  const userId = match ? getAuthUserId(match[1]) : null;
-  if (!userId || !mongoose.isValidObjectId(userId)) {
-    return next(new ApiError(401, 'UNAUTHORIZED', 'Sign in to continue.'));
-  }
-  req.authenticatedUserId = userId;
-  next();
-}
-
-function publicUser(user) {
-  return { id: user._id.toString(), name: user.name, email: user.email };
-}
-
-async function registerUser(req, res) {
-  const { name, email, password } = req.body ?? {};
-  if (typeof name !== 'string' || !name.trim() || name.trim().length > 100) {
-    throw new ApiError(400, 'INVALID_NAME', 'Enter your name (up to 100 characters).');
-  }
-  if (typeof email !== 'string' || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-    throw new ApiError(400, 'INVALID_EMAIL', 'Enter a valid email address.');
-  }
-  if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
-    throw new ApiError(400, 'INVALID_PASSWORD', 'Password must be between 8 and 128 characters.');
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
   }
 
-  try {
-    getTokenSecret();
-  } catch (error) {
-    throw new ApiError(503, 'AUTH_NOT_CONFIGURED', error.message);
-  }
-
-  const user = new User({
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    passwordHash: await hashPassword(password),
-  });
-  try {
-    await user.save();
-  } catch (error) {
-    if (error.code === 11000) {
-      throw new ApiError(409, 'EMAIL_ALREADY_REGISTERED', 'An account with this email already exists.');
-    }
-    throw error;
-  }
-
-  res.status(201).json({ user: publicUser(user), token: createAuthToken(user._id.toString()) });
-}
-
-async function loginUser(req, res) {
-  const { email, password } = req.body ?? {};
-  if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
-    throw new ApiError(400, 'INVALID_CREDENTIALS', 'Enter your email and password.');
-  }
-  try {
-    getTokenSecret();
-  } catch (error) {
-    throw new ApiError(503, 'AUTH_NOT_CONFIGURED', error.message);
-  }
-
-  const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+passwordHash');
-  if (!user || !user.isActive || !(await verifyPassword(password, user.passwordHash))) {
-    throw new ApiError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
-  }
-
-  res.json({ user: publicUser(user), token: createAuthToken(user._id.toString()) });
-}
-
-function authenticateAdmin(req, res, next) {
-  const authorization = req.get('authorization') || '';
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-  const admin = match ? getAdminFromToken(match[1]) : null;
-  if (!admin) return next(new ApiError(401, 'UNAUTHORIZED', 'Sign in with an admin account to continue.'));
-  req.admin = admin;
-  next();
-}
-
-// ===============================
-// User authentication
-// ===============================
-app.use('/api/auth', requireDatabase);
-app.post('/api/auth/register', registerUser);
-app.post('/api/auth/login', loginUser);
-app.post('/api/auth/google', async (req, res, next) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const idToken = req.body?.credential;
-  if (!clientId) {
-    return next(new ApiError(503, 'GOOGLE_AUTH_NOT_CONFIGURED', 'Google sign-in is not configured on the server.'));
-  }
-  if (typeof idToken !== 'string' || !idToken || idToken.length > 10_000) {
-    return next(new ApiError(400, 'INVALID_GOOGLE_CREDENTIAL', 'A valid Google sign-in credential is required.'));
-  }
-
-  try {
-    getTokenSecret();
-    let ticket;
-    try {
-      ticket = await googleOAuthClient.verifyIdToken({ idToken, audience: clientId });
-    } catch {
-      throw new ApiError(401, 'INVALID_GOOGLE_CREDENTIAL', 'Google sign-in could not be verified. Try again.');
-    }
-    const payload = ticket.getPayload();
-    if (
-      !payload ||
-      typeof payload.sub !== 'string' ||
-      typeof payload.email !== 'string' ||
-      payload.email_verified !== true
-    ) {
-      throw new ApiError(401, 'INVALID_GOOGLE_CREDENTIAL', 'Google did not verify this email address.');
-    }
-
-    const email = payload.email.trim().toLowerCase();
-    let user = await User.findOne({ googleId: payload.sub });
-    if (!user) {
-      user = await User.findOne({ email });
-      if (user?.googleId && user.googleId !== payload.sub) {
-        throw new ApiError(409, 'GOOGLE_ACCOUNT_CONFLICT', 'This email is linked to a different Google account.');
-      }
-      if (!user) {
-        user = new User({
-          name: typeof payload.name === 'string' && payload.name.trim()
-            ? payload.name.trim().slice(0, 100)
-            : email.split('@')[0],
-          email,
-          googleId: payload.sub,
-        });
-      } else {
-        user.googleId = payload.sub;
-      }
-      await user.save();
-    }
-
-    if (!user.isActive) {
-      throw new ApiError(403, 'ACCOUNT_DISABLED', 'This account is unavailable.');
-    }
-
-    res.json({ user: publicUser(user), token: createAuthToken(user._id.toString()) });
-  } catch (error) {
-    if (error instanceof ApiError) return next(error);
-    if (error.code === 11000) {
-      return next(new ApiError(409, 'GOOGLE_ACCOUNT_CONFLICT', 'This Google account could not be linked. Contact support.'));
-    }
-    if (error.message?.includes('AUTH_TOKEN_SECRET')) {
-      return next(new ApiError(503, 'AUTH_NOT_CONFIGURED', error.message));
-    }
-    console.error(`[${res.locals.requestId}] Google sign-in failed`, error);
-    next(error);
-  }
-});
-app.get('/api/auth/me', requireUserAuthentication, async (req, res, next) => {
-  try {
-    const user = await User.findById(req.authenticatedUserId);
-    if (!user || !user.isActive) {
-      return next(new ApiError(401, 'UNAUTHORIZED', 'This account is unavailable.'));
-    }
-    res.json({ user: publicUser(user) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/api/admin/login', (req, res) => {
-  const configuredEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const configuredPassword = process.env.ADMIN_PASSWORD;
-  const tokenSecret = process.env.ADMIN_TOKEN_SECRET;
-  if (!configuredEmail || !configuredPassword || !tokenSecret || Buffer.byteLength(tokenSecret) < 32) {
-    return res.status(503).json({
-      error: 'Admin login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD, and a 32-character ADMIN_TOKEN_SECRET in the backend environment.',
+  if (!process.env.JWT_SECRET) {
+    console.error('JWT_SECRET is not configured');
+    return res.status(500).json({
+      error: 'Server authentication is not configured'
     });
   }
 
-  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  const expectedEmail = Buffer.from(configuredEmail);
-  const suppliedEmail = Buffer.from(email);
-  const expectedPassword = Buffer.from(configuredPassword);
-  const suppliedPassword = Buffer.from(password);
-  const emailMatches = expectedEmail.length === suppliedEmail.length
-    && crypto.timingSafeEqual(expectedEmail, suppliedEmail);
-  const passwordMatches = expectedPassword.length === suppliedPassword.length
-    && crypto.timingSafeEqual(expectedPassword, suppliedPassword);
-  if (!emailMatches || !passwordMatches) {
-    return res.status(401).json({ error: 'Invalid email or password.' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    req.admin = decoded;
+    return next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
+// ===============================
+// MongoDB connection
+// ===============================
+if (!process.env.MONGO_URI) {
+  console.error('MONGO_URI is not configured in backend/server/.env');
+} else {
+  mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('MongoDB connected successfully'))
+    .catch((error) => console.error('MongoDB connection error:', error.message));
+}
+
+// ===============================
+// Admin login
+// ===============================
+app.post('/api/admin/login', asyncHandler(async (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (
+    typeof email !== 'string' ||
+    typeof password !== 'string' ||
+    !email.trim() ||
+    !password
+  ) {
+    return res.status(400).json({
+      error: 'Email and password are required.',
+    });
   }
 
-  const admin = { name: process.env.ADMIN_NAME?.trim() || 'Administrator', email: configuredEmail };
-  res.json({ admin, token: createAdminToken(admin) });
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({
+      error: 'Server authentication is not configured.',
+    });
+  }
+
+  const admin = await Admin.findOne({
+    email: email.trim().toLowerCase(),
+  });
+
+  if (!admin) {
+    return res.status(401).json({
+      error: 'Invalid email or password.',
+    });
+  }
+
+  let passwordMatches = false;
+
+  try {
+    passwordMatches = await bcrypt.compare(password, admin.password);
+  } catch (error) {
+    console.error('Admin password verification failed:', error.message);
+  }
+
+  if (!passwordMatches) {
+    return res.status(401).json({
+      error: 'Invalid email or password.',
+    });
+  }
+
+  const token = jwt.sign(
+    {
+      id: admin._id.toString(),
+      email: admin.email,
+      role: 'admin',
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+
+  return res.json({
+    message: 'Login successful',
+    token,
+    admin: {
+      id: admin._id,
+      name: admin.name,
+      email: admin.email,
+      role: 'admin',
+    },
+  });
+}));
+
+// ===============================
+// User profile API
+// ===============================
+app.post('/api/users', asyncHandler(async (req, res) => {
+  try {
+    const user = new User(req.body);
+    const savedUser = await user.save();
+    return res.status(201).json(savedUser);
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(409, 'USER_ALREADY_EXISTS',
+        'A user with this email already exists.');
+    }
+    throw error;
+  }
+}));
+
+// ===============================
+// Skin analysis
+// ===============================
+app.post('/api/skin-analysis', asyncHandler(async (req, res) => {
+  try {
+    const analysis = new SkinAnalysis(req.body);
+    const savedAnalysis = await analysis.save();
+    return res.status(201).json(savedAnalysis);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+}));
+
+app.get('/api/admin/skin-analysis', authenticateAdmin, asyncHandler(async (req, res) => {
+  const analyses = await SkinAnalysis.find()
+    .populate('user', 'name email')
+    .sort({ createdAt: -1 });
+
+  return res.json({ totalAnalyses: analyses.length, analyses });
+}));
+
+// ===============================
+// Reports - admin only
+// ===============================
+app.post('/api/admin/reports', authenticateAdmin, asyncHandler(async (req, res) => {
+  try {
+    const { user, skinAnalysis, title, summary, recommendations, status } = req.body;
+    const report = new Report({
+      user, skinAnalysis, title, summary, recommendations, status
+    });
+    const savedReport = await report.save();
+    return res.status(201).json(savedReport);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+}));
+
+app.get('/api/admin/reports', authenticateAdmin, asyncHandler(async (req, res) => {
+  const reports = await Report.find()
+    .populate('user', 'name email')
+    .populate('skinAnalysis', 'skinType analysisResult')
+    .sort({ createdAt: -1 });
+
+  return res.json({ totalReports: reports.length, reports });
+}));
+
+app.get('/api/admin/reports/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new ApiError(400, 'INVALID_REPORT_ID', 'The report ID is invalid.');
+  }
+
+  const report = await Report.findById(req.params.id)
+    .populate('user', 'name email')
+    .populate('skinAnalysis', 'skinType analysisResult recommendations');
+
+  if (!report) {
+    throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report not found.');
+  }
+
+  return res.json(report);
+}));
+
+// ===============================
+// Admin dashboard stats
+// ===============================
+app.get('/api/admin/stats', authenticateAdmin, asyncHandler(async (req, res) => {
+  const [totalUsers, totalAnalyses, totalReports] = await Promise.all([
+    User.countDocuments(),
+    SkinAnalysis.countDocuments(),
+    Report.countDocuments()
+  ]);
+
+  return res.json({ totalUsers, totalAnalyses, totalReports });
+}));
+
+// ===============================
+// Admin users API - admin only
+// ===============================
+app.get('/api/admin/users', authenticateAdmin, asyncHandler(async (req, res) => {
+  const users = await User.find({})
+    .select('-password')
+    .sort({ createdAt: -1 });
+
+  return res.json({ success: true, totalUsers: users.length, users });
+}));
+
+// ===============================
+// Admin content API - admin only
+// ===============================
+const cleanContentBody = (body) => {
+  const data = { ...(body || {}) };
+  delete data._id;
+  delete data.__v;
+  delete data.createdAt;
+  delete data.updatedAt;
+  return data;
+};
+
+const handleContentWriteError = (error) => {
+  if (error.name === 'ValidationError' || error.name === 'CastError') {
+    throw new ApiError(400, 'INVALID_CONTENT', error.message);
+  }
+  throw error;
+};
+
+app.get('/api/admin/content', authenticateAdmin, asyncHandler(async (req, res) => {
+  const content = await Content.find({}).sort({ createdAt: -1 });
+  return res.json({
+    success: true,
+    contents: content,
+    content,
+    items: content,
+    total: content.length
+  });
+}));
+
+app.post('/api/admin/content', authenticateAdmin, asyncHandler(async (req, res) => {
+  try {
+    const saved = await new Content(cleanContentBody(req.body)).save();
+    return res.status(201).json(saved);
+  } catch (error) {
+    return handleContentWriteError(error);
+  }
+}));
+
+app.put('/api/admin/content/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new ApiError(400, 'INVALID_CONTENT_ID', 'The content ID is invalid.');
+  }
+
+  try {
+    const updated = await Content.findByIdAndUpdate(
+      req.params.id,
+      cleanContentBody(req.body),
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      throw new ApiError(404, 'CONTENT_NOT_FOUND', 'Content not found.');
+    }
+
+    return res.json(updated);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    return handleContentWriteError(error);
+  }
+}));
+
+app.patch('/api/admin/content/:id/status', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new ApiError(400, 'INVALID_CONTENT_ID', 'The content ID is invalid.');
+  }
+
+  const { status } = req.body || {};
+  if (!['draft', 'published'].includes(status)) {
+    throw new ApiError(400, 'INVALID_STATUS', 'Status must be "draft" or "published".');
+  }
+
+  const updated = await Content.findByIdAndUpdate(
+    req.params.id,
+    { status },
+    { new: true, runValidators: true }
+  );
+
+  if (!updated) {
+    throw new ApiError(404, 'CONTENT_NOT_FOUND', 'Content not found.');
+  }
+
+  return res.json(updated);
+}));
+
+app.delete('/api/admin/content/:id', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new ApiError(400, 'INVALID_CONTENT_ID', 'The content ID is invalid.');
+  }
+
+  const deleted = await Content.findByIdAndDelete(req.params.id);
+  if (!deleted) {
+    throw new ApiError(404, 'CONTENT_NOT_FOUND', 'Content not found.');
+  }
+
+  return res.json({ success: true, message: 'Content deleted successfully' });
+}));
+
+// ===============================
+// Admin profile - admin only
+// ===============================
+const formatAdmin = (admin) => ({
+  id: admin._id,
+  name: admin.name,
+  email: admin.email,
+  role: 'admin',
 });
 
-// ===============================
-// Create Skin Analysis
-// ===============================
-app.use('/api/skin-analysis', requireDatabase);
-app.post(
-  '/api/skin-analysis',
-  async (req, res) => {
-    try {
-      const analysis =
-        new SkinAnalysis(req.body);
-
-      const savedAnalysis =
-        await analysis.save();
-
-      res.status(201).json(savedAnalysis);
-
-    } catch (error) {
-      res.status(400).json({
-        error: error.message
-      });
-    }
+app.get('/api/admin/profile', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.admin.id)) {
+    throw new ApiError(401, 'INVALID_TOKEN', 'Invalid session. Please log in again.');
   }
-);
 
+  const admin = await Admin.findById(req.admin.id);
+  if (!admin) {
+    throw new ApiError(404, 'ADMIN_NOT_FOUND', 'Admin account not found.');
 // ===============================
 // Get All Skin Analyses - Admin Only
 // ===============================
@@ -349,8 +464,9 @@ app.get(
       });
     }
   }
-);
 
+  return res.json({ admin: formatAdmin(admin) });
+}));
 // ===============================
 // Create Report - Admin Only
 // ===============================
@@ -367,28 +483,13 @@ app.post(
         status
       } = req.body;
 
-      const report = new Report({
-        user,
-        skinAnalysis,
-        title,
-        summary,
-        recommendations,
-        status
-      });
-
-      const savedReport =
-        await report.save();
-
-      res.status(201).json(savedReport);
-
-    } catch (error) {
-      res.status(400).json({
-        error: error.message
-      });
-    }
+app.put('/api/admin/profile', authenticateAdmin, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.admin.id)) {
+    throw new ApiError(401, 'INVALID_TOKEN', 'Invalid session. Please log in again.');
   }
-);
 
+  const { name, email, password } = req.body || {};
+  const updates = {};
 // ===============================
 // Get All Reports - Admin Only
 // ===============================
@@ -405,19 +506,17 @@ app.get(
           )
           .sort({ createdAt: -1 });
 
-      res.json({
-        totalReports: reports.length,
-        reports
-      });
-
-    } catch (error) {
-      res.status(500).json({
-        error: error.message
-      });
+  if (name !== undefined) {
+    if (typeof name !== 'string' || !name.trim()) {
+      throw new ApiError(400, 'INVALID_NAME', 'Name cannot be empty.');
     }
+    updates.name = name.trim();
   }
-);
 
+  if (email !== undefined) {
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      throw new ApiError(400, 'INVALID_EMAIL', 'Enter a valid email address.');
 // ===============================
 // Get Single Report - Admin Only
 // ===============================
@@ -449,17 +548,46 @@ app.get(
         error: error.message
       });
     }
+
+    const duplicate = await Admin.findOne({
+      email: normalizedEmail,
+      _id: { $ne: req.admin.id },
+    });
+    if (duplicate) {
+      throw new ApiError(409, 'EMAIL_IN_USE', 'Another admin already uses this email.');
+    }
+    updates.email = normalizedEmail;
   }
-);
+
+  if (password !== undefined && password !== '') {
+    if (typeof password !== 'string' || password.length < 8) {
+      throw new ApiError(400, 'WEAK_PASSWORD', 'Password must be at least 8 characters.');
+    }
+    updates.password = await bcrypt.hash(password, 10);
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new ApiError(400, 'NO_CHANGES', 'No changes were provided.');
+  }
+
+  const admin = await Admin.findByIdAndUpdate(
+    req.admin.id,
+    { $set: updates },
+    { new: true, runValidators: true }
+  );
+
+  if (!admin) {
+    throw new ApiError(404, 'ADMIN_NOT_FOUND', 'Admin account not found.');
+  }
+
+  return res.json({ message: 'Profile updated successfully', admin: formatAdmin(admin) });
+}));
 
 // ===============================
-// Sample API Route
+// Sample API route
 // ===============================
 app.get('/api/message', (req, res) => {
-  res.json({
-    message:
-      'Hello from the Node + Express backend!'
-  });
+  res.json({ message: 'Hello from the Node + Express backend!' });
 });
 
 // ===============================
@@ -473,7 +601,8 @@ app.post('/api/images', async (req, res) => {
   if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
     throw new ApiError(415, 'UNSUPPORTED_IMAGE_TYPE', 'Upload a JPG, PNG, or WEBP image.');
   }
-  if (typeof imageData !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(imageData)) {
+  if (typeof imageData !== 'string' ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(imageData)) {
     throw new ApiError(400, 'INVALID_IMAGE_DATA', 'Image data must be valid base64.');
   }
 
@@ -489,16 +618,16 @@ app.post('/api/images', async (req, res) => {
     userId: req.authenticatedUserId,
     fileName: fileName.trim(),
     contentType,
-    imageData: imageBytes,
+    imageData: imageBytes
   }).save();
 
-  res.status(201).json({
+  return res.status(201).json({
     message: 'Image saved successfully',
-    imageId: savedImage._id,
+    imageId: savedImage._id
   });
-});
+}));
 
-app.get('/api/images/:imageId', async (req, res) => {
+app.get('/api/images/:imageId', asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.imageId)) {
     throw new ApiError(400, 'INVALID_IMAGE_ID', 'The image ID is invalid.');
   }
@@ -511,10 +640,10 @@ app.get('/api/images/:imageId', async (req, res) => {
 
   res.set('Content-Type', image.contentType);
   res.set('Cache-Control', 'private, no-store');
-  res.send(image.imageData);
-});
+  return res.send(image.imageData);
+}));
 
-app.post('/api/images/:imageId/analyze', async (req, res) => {
+app.post('/api/images/:imageId/analyze', asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.imageId)) {
     throw new ApiError(400, 'INVALID_IMAGE_ID', 'The image ID is invalid.');
   }
@@ -530,39 +659,52 @@ app.post('/api/images/:imageId/analyze', async (req, res) => {
   }
   const mlServiceUrl = process.env.ML_SERVICE_URL;
   let response;
+
   try {
     response = await fetch(`${mlServiceUrl.replace(/\/$/, '')}/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': image.contentType,
-        'X-Request-Id': res.locals.requestId,
+        'X-Request-Id': res.locals.requestId
       },
       body: image.imageData,
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(30000)
     });
   } catch {
-    throw new ApiError(503, 'ML_SERVICE_UNAVAILABLE', 'Image analysis is temporarily unavailable.');
+    throw new ApiError(503, 'ML_SERVICE_UNAVAILABLE',
+      'Image analysis is temporarily unavailable.');
   }
 
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
     if (response.status < 500) {
-      throw new ApiError(response.status, detail?.error?.code || 'IMAGE_ANALYSIS_FAILED', detail?.error?.message || 'Image analysis failed.');
+      throw new ApiError(
+        response.status,
+        detail?.error?.code || 'IMAGE_ANALYSIS_FAILED',
+        detail?.error?.message || 'Image analysis failed.'
+      );
     }
-    throw new ApiError(502, 'ML_SERVICE_ERROR', 'Image analysis could not be completed.');
+    throw new ApiError(502, 'ML_SERVICE_ERROR',
+      'Image analysis could not be completed.');
   }
 
-  res.json({
+  return res.json({
     imageId: image._id,
     imageUrl: `/api/images/${image._id}`,
-    ...(await response.json()),
+    ...(await response.json())
   });
-});
+}));
 
+// ===============================
+// 404 handler
+// ===============================
 app.use((req, res, next) => {
   next(new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.'));
 });
 
+// ===============================
+// Error handler
+// ===============================
 app.use((error, req, res, next) => {
   const requestId = res.locals.requestId || crypto.randomUUID();
   const status = Number.isInteger(error.status) ? error.status : 500;
@@ -586,15 +728,12 @@ app.use((error, req, res, next) => {
           : 'The request could not be processed.';
 
   if (status >= 500) console.error(`[${requestId}]`, error);
-  res.status(status).json({ error: { code, message, requestId } });
+  return res.status(status).json({ error: { code, message, requestId } });
 });
 
-// Start Server
 // ===============================
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
-
-module.exports = app;
+// Start server
+// ===============================
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
