@@ -1,4 +1,19 @@
 import { useEffect, useState } from "react";
+import AdminLayout from "./AdminLayout";
+
+const API_BASE = "http://localhost:5000";
+
+// Backend errors look like { error: { code, message } } or { error: "text" }.
+// This always turns them into a readable string (fixes "[object Object]").
+const getErrorMessage = (data, fallback) => {
+  if (!data) return fallback;
+  if (typeof data.error === "string") return data.error;
+  if (data.error && typeof data.error.message === "string") {
+    return data.error.message;
+  }
+  if (typeof data.message === "string") return data.message;
+  return fallback;
+};
 
 function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -17,20 +32,26 @@ function AdminUsers() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/admin/users", {
+      const response = await fetch(`${API_BASE}/api/admin/users`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Unable to load users");
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem("adminToken");
+        window.location.href = `${import.meta.env.BASE_URL}admin`;
+        return;
       }
 
-      setUsers(Array.isArray(data.users) ? data.users : []);
+      if (!response.ok) {
+        throw new Error(getErrorMessage(data, "Unable to load users"));
+      }
+
+      setUsers(Array.isArray(data?.users) ? data.users : []);
     } catch (err) {
       console.error("Admin users error:", err);
       setError(err.message || "Something went wrong while loading users.");
@@ -43,18 +64,20 @@ function AdminUsers() {
     fetchUsers();
   }, []);
 
-  const activeUsers = users.filter((user) => {
-    if (!user.isActive || !user.lastActiveAt) return false;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const thirtyDaysAgo = new Date(
-      Date.now() - 30 * 24 * 60 * 60 * 1000
-    );
+  // A user counts as active if not explicitly disabled and had activity in the last 30 days.
+  const isUserActive = (user) => {
+    if (user.isActive === false) return false;
+    const lastActivity = user.lastActiveAt || user.updatedAt || user.createdAt;
+    if (!lastActivity) return false;
+    return new Date(lastActivity) >= thirtyDaysAgo;
+  };
 
-    return new Date(user.lastActiveAt) >= thirtyDaysAgo;
-  }).length;
+  const activeUsers = users.filter(isUserActive).length;
 
   return (
-    <div className="min-h-screen bg-[#f5f8fc] p-6 md:p-8">
+    <AdminLayout activePage="Users" searchPlaceholder="Search users...">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -182,75 +205,79 @@ function AdminUsers() {
                 </thead>
 
                 <tbody className="divide-y divide-[#edf1f1]">
-                  {users.map((user) => (
-                    <tr
-                      key={user._id}
-                      className="transition hover:bg-[#f8fbfa]"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dcefeb] font-bold text-[#287f72]">
-                            {user.name
-                              ? user.name.charAt(0).toUpperCase()
-                              : "U"}
+                  {users.map((user) => {
+                    const active = isUserActive(user);
+
+                    return (
+                      <tr
+                        key={user._id}
+                        className="transition hover:bg-[#f8fbfa]"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dcefeb] font-bold text-[#287f72]">
+                              {user.name
+                                ? user.name.charAt(0).toUpperCase()
+                                : "U"}
+                            </div>
+
+                            <div>
+                              <p className="font-semibold text-[#172033]">
+                                {user.name || "Unknown User"}
+                              </p>
+                              <p className="text-sm text-[#718087]">
+                                {user.email || "No email"}
+                              </p>
+                            </div>
                           </div>
+                        </td>
 
-                          <div>
-                            <p className="font-semibold text-[#172033]">
-                              {user.name || "Unknown User"}
-                            </p>
-                            <p className="text-sm text-[#718087]">
-                              {user.email || "No email"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+                        <td className="px-6 py-4 text-sm text-[#172033]">
+                          {user.age ?? "—"}
+                        </td>
 
-                      <td className="px-6 py-4 text-sm text-[#172033]">
-                        {user.age ?? "—"}
-                      </td>
+                        <td className="px-6 py-4 text-sm capitalize text-[#172033]">
+                          {user.gender || "—"}
+                        </td>
 
-                      <td className="px-6 py-4 text-sm capitalize text-[#172033]">
-                        {user.gender || "—"}
-                      </td>
+                        <td className="px-6 py-4 text-sm capitalize text-[#172033]">
+                          {user.skinType || "—"}
+                        </td>
 
-                      <td className="px-6 py-4 text-sm capitalize text-[#172033]">
-                        {user.skinType || "—"}
-                      </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              active
+                                ? "bg-[#e3f6ed] text-[#16805a]"
+                                : "bg-[#f1f3f4] text-[#718087]"
+                            }`}
+                          >
+                            {active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
 
-                      <td className="px-6 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            user.isActive
-                              ? "bg-[#e3f6ed] text-[#16805a]"
-                              : "bg-[#f1f3f4] text-[#718087]"
-                          }`}
-                        >
-                          {user.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4 text-sm text-[#718087]">
-                        {user.createdAt
-                          ? new Date(user.createdAt).toLocaleDateString(
-                              "en-IN",
-                              {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              }
-                            )
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-6 py-4 text-sm text-[#718087]">
+                          {user.createdAt
+                            ? new Date(user.createdAt).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                }
+                              )
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }
 

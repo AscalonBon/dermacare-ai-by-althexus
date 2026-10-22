@@ -9,7 +9,9 @@ import AdminSkinAnalysis from './admin/AdminSkinAnalysis';
 
 export function App() {
   // Normalize the URL so /admin, /admin/, etc. work consistently.
-  const pathname = window.location.pathname.replace(/\/+$/, "");
+  const pathname = window.location.pathname
+  .replace(/\/+$/, "")
+  .replace(/^\/dermacare-ai-by-althexus/, "");
 
   const [contents, setContents] = useState([]);
 
