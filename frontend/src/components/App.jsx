@@ -119,12 +119,12 @@ export function App() {
 
       {/* HERO */}
       <section id="home" className="min-h-[590px] px-[5%] pt-[65px] pb-[55px] grid grid-cols-1 lg:grid-cols-2 items-center gap-[35px] overflow-hidden bg-[radial-gradient(circle_at_80%_45%,#e9f4ff_0%,#f5f9ff_35%,#ffffff_70%)]">
-        <div className="max-w-[650px] relative z-[2] text-center lg:text-left mx-auto lg:mx-0">
+        <div className="max-w-[710px] relative z-[2] text-center lg:text-left mx-auto lg:mx-0">
           <div className="inline-block px-[18px] py-[10px] mb-[25px] rounded-[25px] bg-[#e9f3ff] text-[#2365b3] text-[15px] font-semibold">
             ✨ Image Quality &amp; Color Measurements
           </div>
           
-          <h1 className="text-[clamp(44px,5vw,68px)] leading-[1.08] tracking-[-2px] text-[#10245c] mb-[25px] font-bold">
+          <h1 className="text-[clamp(44px,4vw,60px)] leading-[1.08] tracking-[0px] text-[#10245c] mb-[25px] font-bold">
             Your AI-Powered
             <span className="block text-[#2168d7]">Skin Health Companion</span>
           </h1>
@@ -173,13 +173,36 @@ export function App() {
           </div>
         </div>
 
-        <div className="relative min-h-[530px] flex items-end justify-center">
-          <img
-            src={womenImage}
-            alt="Example skin photo for image-quality review"
-            className="w-full max-w-[590px] h-[530px] object-cover object-center rounded-[20px]"
-          />
-
+        <div className="relative mx-auto flex min-h-[500px] w-full max-w-[590px] items-center justify-center px-2 py-5 sm:px-6">
+          <div className="absolute inset-x-2 inset-y-5 overflow-hidden rounded-[20px] sm:inset-x-4">
+            <img
+              src={womenImage}
+              alt="Example skin photo for image-quality review"
+              className="h-full w-full scale-[1.25] origin-[50%_top] object-cover object-[40%_center]"
+            />
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-[76px] bg-gradient-to-r from-[#e6efff] via-[#e6efff]/90 to-transparent sm:w-[96px]" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-[76px] bg-gradient-to-l from-[#e6efff] via-[#e6efff]/90 to-transparent sm:w-[96px]" />
+          </div>
+          <div className="absolute left-0 top-[138px] z-10 min-h-[112px] w-[min(154px,40vw)] -translate-x-3 rounded-xl border border-[#dce6ef] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(27,52,80,0.14)] sm:left-1 sm:top-[74px] sm:w-[154px] sm:-translate-x-16">
+            <span className="block text-[10px] font-bold uppercase text-[#287878]">Photo check</span>
+            <strong className="mt-1 block text-sm leading-5 text-[#182440]">Clarity &amp; lighting</strong>
+            <span className="mt-1 block text-[10px] leading-4 text-[#69758a]">Image-quality notes</span>
+          </div>
+          <div className="absolute right-0 top-[112px] z-10 min-h-[94px] w-[min(154px,40vw)] translate-x-3 rounded-xl border border-[#dce6ef] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(27,52,80,0.14)] sm:right-12 sm:w-[154px] sm:translate-x-20">
+            <span className="block text-[10px] font-bold uppercase text-[#287878]">Measurements</span>
+            <strong className="mt-1 block text-sm leading-5 text-[#182440]">Basic color values</strong>
+            <span className="mt-1 block text-[10px] leading-4 text-[#69758a]">Lighting can change results</span>
+          </div>
+          <div className="absolute bottom-[66px] left-0 z-10 min-h-[94px] w-[min(154px,40vw)] -translate-x-3 rounded-xl border border-[#dce6ef] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(27,52,80,0.14)] sm:left-1 sm:w-[154px] sm:-translate-x-16">
+            <span className="block text-[10px] font-bold uppercase text-[#287878]">Your choice</span>
+            <strong className="mt-1 block text-sm leading-5 text-[#182440]">Consent before upload</strong>
+            <span className="mt-1 block text-[10px] leading-4 text-[#69758a]">Optional image submission</span>
+          </div>
+          <div className="absolute bottom-[132px] right-0 z-10 min-h-[94px] w-[min(154px,40vw)] translate-x-3 rounded-xl border border-[#dce6ef] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(27,52,80,0.14)] sm:right-12 sm:w-[154px] sm:translate-x-20">
+            <span className="block text-[10px] font-bold uppercase text-[#287878]">Important</span>
+            <strong className="mt-1 block text-sm leading-5 text-[#182440]">Not a diagnosis</strong>
+            <span className="mt-1 block text-[10px] leading-4 text-[#69758a]">For information only</span>
+          </div>
         </div>
       </section>
 
