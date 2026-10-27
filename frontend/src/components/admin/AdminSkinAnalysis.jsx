@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import AdminLayout, {
-  AdminIcon,
-  getErrorMessage,
-  redirectToLogin,
-} from "./AdminLayout";
+import AdminLayout, { AdminIcon } from "./AdminLayout";
+import { getErrorMessage, redirectToLogin } from "./adminUtils";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = API_BASE_URL;
+
+const formatAnalysisResult = (result) => (
+  typeof result === "string" ? result : result == null ? "—" : JSON.stringify(result)
+);
 
 function AdminSkinAnalysis() {
   const [analyses, setAnalyses] = useState([]);
@@ -55,7 +57,7 @@ function AdminSkinAnalysis() {
   };
 
   useEffect(() => {
-    fetchAnalyses();
+    queueMicrotask(() => { void fetchAnalyses(); });
   }, []);
 
   const filteredAnalyses = useMemo(() => {
@@ -67,7 +69,7 @@ function AdminSkinAnalysis() {
         analysis.user?.name?.toLowerCase().includes(search) ||
         analysis.user?.email?.toLowerCase().includes(search) ||
         analysis.skinType?.toLowerCase().includes(search) ||
-        analysis.analysisResult?.toLowerCase().includes(search)
+        formatAnalysisResult(analysis.analysisResult).toLowerCase().includes(search)
     );
   }, [analyses, searchTerm]);
 
@@ -261,7 +263,7 @@ function AdminSkinAnalysis() {
                     </td>
 
                     <td className="max-w-md px-6 py-4 text-sm text-gray-600">
-                      {analysis.analysisResult || "—"}
+                      {formatAnalysisResult(analysis.analysisResult)}
                     </td>
 
                     <td className="px-6 py-4 text-sm text-gray-500">

@@ -13,6 +13,7 @@ const apiBaseUrl = (
 export default function AnalyzePage() {
 	const navigate = useNavigate();
 	const [selectedImage, setSelectedImage] = useState(null);
+	const [privacyConsent, setPrivacyConsent] = useState(false);
 	const [previewUrl, setPreviewUrl] = useState('');
 	const [errorMessage, setErrorMessage] = useState('');
 	const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -45,6 +46,10 @@ export default function AnalyzePage() {
 			setErrorMessage('Please sign in or create an account before uploading an image.');
 			return;
 		}
+		if (!privacyConsent) {
+			setErrorMessage('Please review and accept the image-analysis consent before continuing.');
+			return;
+		}
 		if (!apiBaseUrl && !import.meta.env.DEV) {
 			setErrorMessage('The API URL is not configured. Set VITE_API_URL and redeploy the frontend.');
 			return;
@@ -70,6 +75,7 @@ export default function AnalyzePage() {
 					fileName: selectedImage.name,
 					contentType: selectedImage.type,
 					imageData,
+					privacyConsent,
 				}),
 			});
 			const uploadResult = await uploadResponse.json();
@@ -130,8 +136,12 @@ export default function AnalyzePage() {
 						</label>
 
 						{selectedImage && <div className="mt-4 flex items-center justify-between rounded-lg bg-[#f3f8fc] px-4 py-3 text-xs"><span className="truncate text-[#5f6d84]">{selectedImage.name}</span><button type="button" onClick={() => { setSelectedImage(null); setPreviewUrl(''); setErrorMessage(''); }} className="font-bold text-[#b84d50]">Remove</button></div>}
+								<label className="mt-5 flex items-start gap-3 text-xs leading-5 text-[#5f6d84]">
+									<input type="checkbox" checked={privacyConsent} onChange={(event) => setPrivacyConsent(event.target.checked)} className="mt-1 h-4 w-4 accent-[#147b82]" />
+									<span>I consent to securely storing this image and processing it for informational image-quality analysis. It is not a medical diagnosis.</span>
+								</label>
 						{errorMessage && <p role="alert" className="mt-4 rounded-lg bg-[#fff0f0] px-4 py-3 text-sm text-[#a8333a]">{errorMessage}</p>}
-						<button type="button" disabled={!selectedImage || isAnalyzing} onClick={handleAnalyze} className={`mt-6 flex min-h-12 w-full items-center justify-center rounded-lg text-sm font-bold text-white transition ${selectedImage && !isAnalyzing ? 'bg-[#09275d] hover:bg-[#0b2c78]' : 'cursor-not-allowed bg-[#b7c4d3]'}`}>{isAnalyzing ? 'Saving image and analyzing…' : 'Analyze Image →'}</button>
+								<button type="button" disabled={!selectedImage || !privacyConsent || isAnalyzing} onClick={handleAnalyze} className={`mt-6 flex min-h-12 w-full items-center justify-center rounded-lg text-sm font-bold text-white transition ${selectedImage && privacyConsent && !isAnalyzing ? 'bg-[#09275d] hover:bg-[#0b2c78]' : 'cursor-not-allowed bg-[#b7c4d3]'}`}>{isAnalyzing ? 'Saving image and analyzing…' : 'Analyze Image →'}</button>
 					</section>
 
 					<aside className="space-y-5">

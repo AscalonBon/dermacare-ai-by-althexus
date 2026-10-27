@@ -1,18 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
 import skinImage from '../assets/women-image.png';
+import { apiRequest } from '../lib/api';
 
 const homePath = import.meta.env.BASE_URL;
 const analyzePath = `${homePath}analyze`;
 const reportPath = `${homePath}report`;
 const profilePath = `${homePath}profile`; 
-
-const analyses = [
-	{ date: '24 Aug 2025', time: '10:30 AM', score: '82', status: 'Good', tone: 'good' },
-	{ date: '10 Aug 2025', time: '11:15 AM', score: '74', status: 'Moderate', tone: 'moderate' },
-	{ date: '27 Jul 2025', time: '09:45 AM', score: '68', status: 'Moderate', tone: 'moderate' },
-];
 
 const sidebarItems = [
   ['⌂', 'Dashboard', true],
@@ -37,59 +32,59 @@ function Card({ children, className = '' }) {
 
 function ScoreSparkline() {
 	return (
-		<svg viewBox="0 0 300 80" className="h-20 w-full" role="img" aria-label="Skin score trend rising from 68 to 82">
-			<defs>
-				<linearGradient id="score-fill" x1="0" x2="0" y1="0" y2="1">
-					<stop offset="0" stopColor="#68c9c0" stopOpacity="0.28" />
-					<stop offset="1" stopColor="#68c9c0" stopOpacity="0" />
-				</linearGradient>
-			</defs>
-			<path d="M0 63 C25 57 38 58 61 59 S91 54 110 43 S141 42 157 49 S188 41 204 29 S241 25 263 22 S286 13 300 10 V80 H0 Z" fill="url(#score-fill)" />
-			<path d="M0 63 C25 57 38 58 61 59 S91 54 110 43 S141 42 157 49 S188 41 204 29 S241 25 263 22 S286 13 300 10" fill="none" stroke="#197b82" strokeWidth="2.5" />
-			{[[61, 59], [204, 29], [300, 10]].map(([cx, cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.5" fill="#197b82" />)}
-		</svg>
+		<p className="mt-3 text-xs leading-5 text-[#69758a]">A validated skin score is not available from the current image-quality service.</p>
 	);
 }
 
-function ProgressChart() {
+function ProgressChart({ analyses }) {
 	return (
-		<div className="relative h-[190px] pt-2">
-			<div className="absolute inset-x-0 top-3 bottom-7 flex flex-col justify-between text-[10px] text-[#69758a]">
-				{[100, 80, 60, 40, 20, 0].map((value) => (
-					<div key={value} className="flex items-center gap-2"><span className="w-6 text-right">{value}</span><span className="h-px flex-1 bg-[#edf1f5]" /></div>
-				))}
-			</div>
-			<svg viewBox="0 0 520 150" preserveAspectRatio="none" className="absolute left-9 right-0 top-3 h-[150px] w-[calc(100%-36px)]" role="img" aria-label="Skin score progress from 70 to 82">
-				<defs>
-					<linearGradient id="progress-fill" x1="0" x2="0" y1="0" y2="1">
-						<stop offset="0" stopColor="#62c8bd" stopOpacity="0.26" />
-						<stop offset="1" stopColor="#62c8bd" stopOpacity="0" />
-					</linearGradient>
-				</defs>
-				<path d="M20 62 L140 56 L260 43 L380 40 L500 35 V150 H20 Z" fill="url(#progress-fill)" />
-				<path d="M20 62 L140 56 L260 43 L380 40 L500 35" fill="none" stroke="#18777e" strokeWidth="3" />
-				{[[20, 62, '70'], [140, 56, '74'], [260, 43, '78'], [380, 40, '80'], [500, 35, '82']].map(([cx, cy, value]) => (
-					<g key={value}><circle cx={cx} cy={cy} r="4" fill="#18777e" /><text x={cx} y={Number(cy) - 12} textAnchor="middle" fontSize="11" fill="#273550">{value}</text></g>
-				))}
-			</svg>
-			<div className="absolute bottom-0 left-10 right-0 flex justify-between text-[10px] text-[#69758a]">
-				<span>10 Aug</span><span>17 Aug</span><span>24 Aug</span><span>31 Aug</span><span>07 Sep</span>
-			</div>
+		<div className="mt-5 space-y-3">
+			{analyses.length ? analyses.slice(0, 5).map((analysis) => (
+				<div key={analysis._id} className="flex items-center justify-between border-b border-[#edf1f5] pb-2 text-xs">
+					<span>{new Date(analysis.createdAt).toLocaleDateString()}</span>
+					<span className="text-[#69758a]">Informational analysis</span>
+				</div>
+			)) : <p className="text-xs text-[#69758a]">Completed analyses will appear here.</p>}
 		</div>
 	);
 }
 
 export default function DashboardPage() {
-	const [userName] = useState(() => {
+	const [userName, setUserName] = useState(() => {
 		try {
 			const user = JSON.parse(localStorage.getItem('dermacare-user') || 'null');
 			return typeof user?.name === 'string' && user.name.trim()
 				? user.name.trim()
-				: 'Test';
+				: 'there';
 		} catch {
-			return 'Test';
+			return 'there';
 		}
 	});
+	const [analyses, setAnalyses] = useState([]);
+	const [historyError, setHistoryError] = useState('');
+
+	useEffect(() => {
+		if (!localStorage.getItem('dermacare-auth-token')) {
+			window.location.href = `${homePath}login`;
+			return;
+		}
+		let active = true;
+		Promise.all([apiRequest('/api/profile'), apiRequest('/api/analyses')])
+			.then(([profile, history]) => {
+				if (!active) return;
+				if (profile.user?.name) setUserName(profile.user.name);
+				setAnalyses(Array.isArray(history.analyses) ? history.analyses : []);
+			})
+			.catch((error) => {
+				if (active) setHistoryError(error.message || 'Analysis history could not be loaded.');
+			});
+		return () => { active = false; };
+	}, []);
+
+	const latestAnalysis = analyses[0];
+	const latestAnalysisDate = latestAnalysis?.createdAt
+		? new Date(latestAnalysis.createdAt).toLocaleString()
+		: 'No analyses yet';
 
 	return (
 		<div className="min-h-screen bg-[#f7f9fc] text-[#182440] lg:flex">
@@ -143,26 +138,27 @@ export default function DashboardPage() {
 					</div>
 				</header>
 
+				{historyError && <p role="alert" className="mb-4 rounded-lg bg-[#fff0f0] px-4 py-3 text-sm text-[#a8333a]">{historyError}</p>}
 				<div className="grid gap-4 xl:grid-cols-3">
 					<Card className="p-5">
-						<div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e5f8f6] text-xl text-[#147b82]">⌁</div><h2 className="text-sm font-bold">Overall Skin Score</h2></div><StatusBadge>Good</StatusBadge></div>
-						<div className="mt-2 flex items-baseline gap-2"><strong className="text-4xl font-bold text-[#10245c]">82</strong><span className="text-sm text-[#69758a]">/ 100</span></div>
+						<div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e5f8f6] text-xl text-[#147b82]">⌁</div><h2 className="text-sm font-bold">Skin Score</h2></div><StatusBadge>Not assessed</StatusBadge></div>
+						<div className="mt-2 flex items-baseline gap-2"><strong className="text-4xl font-bold text-[#10245c]">—</strong><span className="text-sm text-[#69758a]">/ 100</span></div>
 						<ScoreSparkline />
-						<a href="#reports" className="text-xs font-bold text-[#287878]">View Details&nbsp; →</a>
+						<a href={analyzePath} className="mt-3 inline-block text-xs font-bold text-[#287878]">Start an analysis&nbsp; →</a>
 					</Card>
 
-					<Card className="p-5"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#eef4fb] text-xl text-[#182440]">□</div><h2 className="text-sm font-bold">Last Analysis</h2></div><strong className="mt-5 block text-2xl font-bold text-[#10245c]">24 Aug 2025</strong><div className="mt-2"><StatusBadge>Completed</StatusBadge></div><a href="#reports" className="mt-11 block text-xs font-bold text-[#287878]">View Report&nbsp; →</a></Card>
+					<Card className="p-5"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#eef4fb] text-xl text-[#182440]">□</div><h2 className="text-sm font-bold">Last Analysis</h2></div><strong className="mt-5 block text-xl font-bold text-[#10245c]">{latestAnalysisDate}</strong><div className="mt-2"><StatusBadge>{latestAnalysis ? 'Saved' : 'No history'}</StatusBadge></div><a href="#reports" className="mt-8 block text-xs font-bold text-[#287878]">View History&nbsp; →</a></Card>
 
-					<Card className="p-5"><div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#fff0ed] text-xl text-[#b84d50]">!</div><h2 className="text-sm font-bold">Active Concerns</h2></div><strong className="text-2xl text-[#10245c]">2</strong></div><div className="mt-5 space-y-3 text-xs"><div className="flex justify-between"><span><i className="mr-2 inline-block h-2 w-2 rounded-full bg-[#f1ae2d]" />Acne</span><b className="font-normal text-[#c18b24]">Moderate</b></div><div className="flex justify-between"><span><i className="mr-2 inline-block h-2 w-2 rounded-full bg-[#1ea866]" />Dark Spots</span><b className="font-normal text-[#26945f]">Low</b></div></div><a href="#reports" className="mt-7 block text-xs font-bold text-[#287878]">View Details&nbsp; →</a></Card>
+					<Card className="p-5"><div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#fff0ed] text-xl text-[#b84d50]">!</div><h2 className="text-sm font-bold">Skin Concerns</h2></div><strong className="text-sm text-[#10245c]">Not assessed</strong></div><p className="mt-5 text-xs leading-5 text-[#69758a]">The current service reports image quality and color measurements. It does not identify or diagnose skin conditions.</p></Card>
 				</div>
 
 				<div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.45fr]">
-					<Card className="p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-bold">Concern Overview</h2><span className="text-2xl text-[#50b6b2]">◯</span></div><div className="mt-5 grid grid-cols-[1fr_120px] items-center gap-4"><div className="space-y-3 text-xs"><div className="flex justify-between gap-4"><span>Acne</span><span className="text-[#c18b24]">● Moderate</span></div><div className="flex justify-between gap-4"><span>Dark Spots</span><span className="text-[#26945f]">● Low</span></div><div className="flex justify-between gap-4"><span>Pores</span><span className="text-[#c18b24]">● Moderate</span></div><div className="flex justify-between gap-4"><span>Redness</span><span className="text-[#26945f]">● Low</span></div></div><div className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-full border-[10px] border-[#6ac8bd] border-l-[#f08b8d] border-b-[#f08b8d] text-2xl text-[#58b5b0]">♧</div></div><a href="#reports" className="mt-5 block text-xs font-bold text-[#287878]">View Full Report&nbsp; →</a></Card>
-					<Card className="p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-bold">Skin Score Progress</h2><button type="button" className="rounded-lg border border-[#e2e7ee] px-3 py-2 text-[10px] text-[#273550]">Last 1 Month&nbsp;⌄</button></div><ProgressChart /></Card>
+					<Card className="p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-bold">Latest Image Quality</h2><span className="text-2xl text-[#50b6b2]">◯</span></div>{latestAnalysis?.analysisResult?.quality ? <div className="mt-5 grid grid-cols-2 gap-3 text-xs"><div className="rounded-lg bg-[#f5f9fb] p-3"><span className="block text-[#69758a]">Brightness</span><strong>{latestAnalysis.analysisResult.quality.brightness ?? '—'}</strong></div><div className="rounded-lg bg-[#f5f9fb] p-3"><span className="block text-[#69758a]">Sharpness</span><strong>{latestAnalysis.analysisResult.quality.sharpness ?? '—'}</strong></div><div className="rounded-lg bg-[#f5f9fb] p-3"><span className="block text-[#69758a]">Color spread</span><strong>{latestAnalysis.analysisResult.quality.colorSpread ?? '—'}</strong></div></div> : <p className="mt-5 text-xs text-[#69758a]">Measurements will appear after your first analysis.</p>}<a href={latestAnalysis ? `${reportPath}?analysis=${latestAnalysis._id}` : reportPath} className="mt-5 block text-xs font-bold text-[#287878]">Open latest report&nbsp; →</a></Card>
+					<Card className="p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-bold">Analysis Activity</h2><span className="text-xs text-[#69758a]">{analyses.length} saved</span></div><ProgressChart analyses={analyses} /></Card>
 				</div>
 
 				<div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_1fr]">
-					<Card id="reports" className="p-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">Recent Analyses</h2><a href="#reports" className="text-xs font-bold text-[#287878]">View All&nbsp; →</a></div><div>{analyses.map((analysis) => <div key={analysis.date} className="flex items-center gap-3 border-t border-[#edf0f4] py-3 text-xs"><img src={skinImage} alt="Skin analysis thumbnail" className="h-11 w-11 rounded-lg object-cover object-[48%_35%]" /><div className="min-w-0 flex-1"><p className="font-semibold">{analysis.date} <span className="font-normal text-[#69758a]">• &nbsp;{analysis.time}</span></p><p className="mt-1 text-[11px] text-[#69758a]">Completed</p></div><div className="hidden sm:block"><span className="text-[11px] text-[#69758a]">Score</span><strong className="ml-2 text-lg">{analysis.score}<small className="text-[10px] font-normal"> /100</small></strong></div><StatusBadge tone={analysis.tone}>{analysis.status}</StatusBadge><span className="text-lg text-[#69758a]">›</span></div>)}</div></Card>
+					<Card id="reports" className="p-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold">Recent Analyses</h2><span className="text-xs text-[#69758a]">{analyses.length} saved</span></div>{analyses.length ? analyses.map((analysis) => <a key={analysis._id} href={`${reportPath}?analysis=${analysis._id}`} className="flex items-center gap-3 border-t border-[#edf0f4] py-3 text-xs hover:bg-[#f8fbfc]"><img src={skinImage} alt="Skin analysis" className="h-11 w-11 rounded-lg object-cover object-[48%_35%]" /><div className="min-w-0 flex-1"><p className="font-semibold">{new Date(analysis.createdAt).toLocaleString()}</p><p className="mt-1 text-[11px] text-[#69758a]">{analysis.analysisResult?.analysisType || 'Informational image analysis'}</p></div><StatusBadge>Saved</StatusBadge><span className="text-lg text-[#69758a]">›</span></a>) : <p className="py-8 text-center text-sm text-[#69758a]">{historyError ? 'History is unavailable.' : 'No saved analyses yet.'}</p>}</Card>
 					<div className="space-y-4"><Card className="p-5"><h2 className="text-sm font-bold">Quick Action</h2><div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-[#a9cfce] bg-[#fbffff] p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#e4f7f5] text-2xl text-[#147b82]">↥</div><div className="min-w-0 flex-1"><strong className="block text-xs">Start New Analysis</strong><p className="mt-1 text-[11px] leading-4 text-[#69758a]">Upload your skin image to get AI-powered insights.</p></div><a href={analyzePath} className="rounded-lg bg-[#09275d] px-3 py-2 text-[11px] font-bold text-white transition hover:bg-[#0b2c78]">＋ New Analysis</a></div></Card><Card className="p-5"><h2 className="text-sm font-bold">AI Assistant</h2><div className="mt-3 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e4f7f5] text-xl text-[#147b82]">♧</div><p className="flex-1 text-[11px] leading-4 text-[#69758a]">Ask me anything about your skin health.</p><button type="button" className="rounded-lg border border-[#75bdbb] px-4 py-2 text-[11px] font-bold text-[#287878] transition hover:bg-[#e9f8f7]">Chat Now</button></div></Card></div>
 				</div>
 			</main>

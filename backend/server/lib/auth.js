@@ -45,7 +45,7 @@ function createAuthToken(userId) {
   return `${payload}.${signature}`;
 }
 
-function createAdminToken({ email, name }) {
+function createAdminToken({ id, email, name }) {
   const secret = process.env.ADMIN_TOKEN_SECRET;
   if (!secret || Buffer.byteLength(secret) < 32) {
     throw new Error('ADMIN_TOKEN_SECRET must contain at least 32 characters.');
@@ -53,7 +53,9 @@ function createAdminToken({ email, name }) {
 
   const now = Math.floor(Date.now() / 1000);
   const payload = Buffer.from(JSON.stringify({
-    sub: email,
+    sub: id || email,
+    id: id || null,
+    email,
     name,
     role: 'admin',
     iat: now,
@@ -84,7 +86,12 @@ function getAdminFromToken(token) {
       decoded.exp <= Math.floor(Date.now() / 1000)
     ) return null;
 
-    return { email: decoded.sub, name: decoded.name, role: decoded.role };
+    return {
+      id: typeof decoded.id === 'string' ? decoded.id : null,
+      email: typeof decoded.email === 'string' ? decoded.email : decoded.sub,
+      name: decoded.name,
+      role: decoded.role,
+    };
   } catch {
     return null;
   }

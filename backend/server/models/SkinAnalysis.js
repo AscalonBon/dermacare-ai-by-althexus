@@ -10,14 +10,18 @@ const skinAnalysisSchema = new mongoose.Schema(
 
     skinType: {
       type: String,
-      enum: ["normal", "dry", "oily", "combination", "sensitive"],
-      required: true,
+      enum: ["normal", "dry", "oily", "combination", "sensitive", "not_assessed"],
+      default: "not_assessed",
     },
 
     analysisResult: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       required: true,
-      trim: true,
+    },
+
+    image: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Image",
     },
 
     recommendations: {

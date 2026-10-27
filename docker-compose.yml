@@ -1,0 +1,53 @@
+services:
+	mongo:
+		image: mongo:8
+		restart: unless-stopped
+		volumes:
+			- mongo-data:/data/db
+		healthcheck:
+			test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+			interval: 10s
+			timeout: 5s
+			retries: 5
+
+	ai-service:
+		build:
+			context: ./backend/ai-service
+		restart: unless-stopped
+		environment:
+			ML_SERVICE_API_KEY: ${ML_SERVICE_API_KEY:?Set ML_SERVICE_API_KEY in .env}
+			MODEL_PATH: ${MODEL_PATH:-/app/models/skin_classifier.pt}
+		healthcheck:
+			test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+			interval: 15s
+			timeout: 5s
+			retries: 5
+
+	api:
+		build:
+			context: ./backend/server
+		restart: unless-stopped
+		depends_on:
+			mongo:
+				condition: service_healthy
+			ai-service:
+				condition: service_healthy
+		environment:
+			PORT: 5000
+			MONGO_URI: mongodb://mongo:27017/dermacare
+			AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:?Set AUTH_TOKEN_SECRET in .env}
+			ADMIN_TOKEN_SECRET: ${ADMIN_TOKEN_SECRET:?Set ADMIN_TOKEN_SECRET in .env}
+			ML_SERVICE_URL: http://ai-service:8000
+			ML_SERVICE_API_KEY: ${ML_SERVICE_API_KEY:?Set ML_SERVICE_API_KEY in .env}
+			FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-https://dermacareai.vercel.app,http://localhost:5173,http://127.0.0.1:5173}
+			GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+		ports:
+			- "${PORT:-5000}:5000"
+		healthcheck:
+			test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+			interval: 15s
+			timeout: 5s
+			retries: 5
+
+volumes:
+	mongo-data:

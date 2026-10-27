@@ -6,6 +6,10 @@ import AdminLogin from './admin/AdminLogin';
 import AdminDashboard from './admin/AdminDashboard';
 import AdminUsers from './admin/AdminUsers';
 import AdminSkinAnalysis from './admin/AdminSkinAnalysis';
+import AdminReports from './admin/AdminReports';
+import AdminContent from './admin/AdminContent';
+import AdminSettings from './admin/AdminSettings';
+import { apiRequest } from '../lib/api';
 
 export function App() {
   // Normalize the URL so /admin, /admin/, etc. work consistently.
@@ -20,15 +24,8 @@ export function App() {
 
     const loadPublishedContent = async () => {
       try {
-        const response = await fetch(
-          "http://127.0.0.1:5000/api/content"
-        );
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setContents(data.contents || []);
-        }
+        const data = await apiRequest('/api/content', { auth: false });
+        setContents(data.contents || []);
       } catch (error) {
         console.error("Unable to load published content:", error);
       }
@@ -44,6 +41,18 @@ export function App() {
 
   if (pathname.endsWith("/admin/users")) {
     return <AdminUsers />;
+  }
+
+  if (pathname.endsWith("/admin/reports")) {
+    return <AdminReports />;
+  }
+
+  if (pathname.endsWith("/admin/content")) {
+    return <AdminContent />;
+  }
+
+  if (pathname.endsWith("/admin/settings")) {
+    return <AdminSettings />;
   }
 
   if (pathname.endsWith("/admin/dashboard")) {

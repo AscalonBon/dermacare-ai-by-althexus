@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import AdminLayout, {
-  AdminIcon,
-  getErrorMessage,
-  redirectToLogin,
-} from "./AdminLayout";
+import AdminLayout, { AdminIcon } from "./AdminLayout";
+import { getErrorMessage, redirectToLogin } from "./adminUtils";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = API_BASE_URL;
 
 function AdminReports() {
   const [reports, setReports] = useState([]);
@@ -54,7 +52,7 @@ function AdminReports() {
   };
 
   useEffect(() => {
-    fetchReports();
+    queueMicrotask(() => { void fetchReports(); });
   }, []);
 
   const filteredReports = useMemo(() => {

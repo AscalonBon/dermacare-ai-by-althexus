@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import AdminLayout, {
-  AdminIcon,
-  getErrorMessage,
-  redirectToLogin,
-} from "./AdminLayout";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import AdminLayout, { AdminIcon } from "./AdminLayout";
+import { getErrorMessage, redirectToLogin } from "./adminUtils";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = API_BASE_URL;
 
 const EMPTY_FORM = {
   title: "",
@@ -32,7 +30,7 @@ function AdminContent() {
   const getToken = () => localStorage.getItem("adminToken");
 
   // Shared request helper: adds the token, handles expired sessions and errors.
-  const apiRequest = async (path, options = {}) => {
+  const apiRequest = useCallback(async (path, options = {}) => {
     const token = getToken();
 
     if (!token) {
@@ -60,9 +58,9 @@ function AdminContent() {
     }
 
     return data;
-  };
+  }, []);
 
-  const fetchContents = async () => {
+  const fetchContents = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -75,12 +73,11 @@ function AdminContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiRequest]);
 
   useEffect(() => {
-    fetchContents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    queueMicrotask(() => { void fetchContents(); });
+  }, [fetchContents]);
 
   const openAddModal = () => {
     setEditingContent(null);
