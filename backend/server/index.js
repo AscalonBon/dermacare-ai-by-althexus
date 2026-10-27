@@ -247,13 +247,13 @@ app.post('/api/auth/google', authLimiter, requireDatabase, asyncHandler(async (r
   return res.json({ token: createAuthToken(user._id.toString()), user: publicUser(user) });
 }));
 
-app.get('/api/profile', requireDatabase, authenticateUser, asyncHandler(async (req, res) => {
+app.get('/api/profile', authenticateUser, requireDatabase, asyncHandler(async (req, res) => {
   const user = await User.findById(req.authenticatedUserId);
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User account not found.');
   return res.json({ user: publicUser(user) });
 }));
 
-app.put('/api/profile', requireDatabase, authenticateUser, asyncHandler(async (req, res) => {
+app.put('/api/profile', authenticateUser, requireDatabase, asyncHandler(async (req, res) => {
   const user = await User.findById(req.authenticatedUserId);
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User account not found.');
   const { name, age, gender, skinType, avatarDataUrl } = req.body || {};
