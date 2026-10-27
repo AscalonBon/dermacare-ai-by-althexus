@@ -1,7 +1,7 @@
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './styles/index.css';
 
 import App from './components/App.jsx';
@@ -11,6 +11,7 @@ import AnalyzePage from './components/AnalyzePage.jsx';
 import ReportPage from './components/ReportPage.jsx';
 import Login from './components/common/Login.jsx';
 import ProfilePage from './components/common/Profile.jsx';
+import RequireAuth from './components/common/RequireAuth.jsx';
 
 // Admin pages
 import AdminLogin from './components/admin/AdminLogin.jsx';
@@ -19,7 +20,6 @@ import AdminContent from './components/admin/AdminContent.jsx';
 import AdminUsers from './components/admin/AdminUsers.jsx';
 import AdminSkinAnalysis from './components/admin/AdminSkinAnalysis.jsx';
 import AdminReports from './components/admin/AdminReports.jsx';
-import AdminFeedback from './components/admin/AdminFeedback.jsx';
 import AdminSettings from './components/admin/AdminSettings.jsx';
 
 createRoot(document.getElementById('root')).render(
@@ -29,13 +29,11 @@ createRoot(document.getElementById('root')).render(
         {/* Public website routes */}
         <Route path="/" element={<App />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/admin/*" element={<App />} />
-         <Route path="/login" element={<Login />} />
         <Route path="/faq" element={<FAQPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/analyze" element={<AnalyzePage />} />
-        <Route path="/report" element={<ReportPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+        <Route path="/analyze" element={<RequireAuth><AnalyzePage /></RequireAuth>} />
+        <Route path="/report" element={<RequireAuth><ReportPage /></RequireAuth>} />
+        <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<AdminLogin />} />
@@ -47,7 +45,7 @@ createRoot(document.getElementById('root')).render(
           element={<AdminSkinAnalysis />}
         />
         <Route path="/admin/reports" element={<AdminReports />} />
-        <Route path="/admin/feedback" element={<AdminFeedback />} />
+        <Route path="/admin/feedback" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/settings" element={<AdminSettings />} />
       </Routes>
     </BrowserRouter>

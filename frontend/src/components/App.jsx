@@ -18,6 +18,22 @@ export function App() {
   .replace(/^\/dermacare-ai-by-althexus/, "");
 
   const [contents, setContents] = useState([]);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem('dermacare-auth-token')) return undefined;
+    let active = true;
+    apiRequest('/api/profile')
+      .then(({ user }) => {
+        if (active && user?.id) setIsSignedIn(true);
+      })
+      .catch(() => {
+        localStorage.removeItem('dermacare-auth-token');
+        localStorage.removeItem('dermacare-user');
+        localStorage.removeItem('dermacare-user-id');
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (window.location.pathname.replace(/\/+$/, "").includes("/admin")) return;
@@ -92,18 +108,12 @@ export function App() {
           </nav>
 
           <a
-            href={`${import.meta.env.BASE_URL}dashboard`}
+            href={`${import.meta.env.BASE_URL}${isSignedIn ? 'dashboard' : 'login'}`}
             className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-[#123a91] px-5 text-sm font-semibold text-white transition hover:-translate-y-[2px] hover:bg-[#0b2c78]"
           >
-            Dashboard
+            {isSignedIn ? 'Dashboard' : 'Get Started'}
           </a>
 
-          <a
-          href={`${import.meta.env.BASE_URL}login`}
-          className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-[#123a91] px-5 text-sm font-semibold text-[#123a91] transition hover:bg-[#123a91] hover:text-white"
-          >
-  Login
-</a>
         </div>
       </header>
 
@@ -111,7 +121,7 @@ export function App() {
       <section id="home" className="min-h-[590px] px-[5%] pt-[65px] pb-[55px] grid grid-cols-1 lg:grid-cols-2 items-center gap-[35px] overflow-hidden bg-[radial-gradient(circle_at_80%_45%,#e9f4ff_0%,#f5f9ff_35%,#ffffff_70%)]">
         <div className="max-w-[650px] relative z-[2] text-center lg:text-left mx-auto lg:mx-0">
           <div className="inline-block px-[18px] py-[10px] mb-[25px] rounded-[25px] bg-[#e9f3ff] text-[#2365b3] text-[15px] font-semibold">
-            ✨ AI-Powered Skin Health Analysis
+            ✨ Image Quality &amp; Color Measurements
           </div>
           
           <h1 className="text-[clamp(44px,5vw,68px)] leading-[1.08] tracking-[-2px] text-[#10245c] mb-[25px] font-bold">
@@ -120,12 +130,12 @@ export function App() {
           </h1>
           
           <p className="max-w-[540px] mx-auto lg:mx-0 text-[#5f6d84] text-[20px] leading-[1.6] mb-[30px] font-normal">
-            Analyze, understand and improve your skin with advanced AI technology.
+            Review photo clarity and basic color measurements before sharing an image with a healthcare professional.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-[15px] justify-center lg:justify-start mb-[42px]">
-            <a href={`${import.meta.env.BASE_URL}dashboard`} className="inline-flex items-center justify-center px-[27px] py-[14px] rounded-[10px] bg-[#123a91] text-white font-semibold hover:bg-[#0b2c78] hover:-translate-y-[2px] transition duration-300">
-              Get Started →
+            <a href={`${import.meta.env.BASE_URL}${isSignedIn ? 'dashboard' : 'login'}`} className="inline-flex items-center justify-center px-[27px] py-[14px] rounded-[10px] bg-[#123a91] text-white font-semibold hover:bg-[#0b2c78] hover:-translate-y-[2px] transition duration-300">
+              {isSignedIn ? 'Go to Dashboard →' : 'Get Started →'}
             </a>
           </div>
 
@@ -136,8 +146,8 @@ export function App() {
                 ✓
               </div>
               <div>
-                <strong className="block text-[#182440] text-[14px] mb-[3px] font-bold">Secure & Private</strong>
-                <p className="text-[12px] text-[#6b778c] leading-[1.5] font-normal">Your data is encrypted and protected</p>
+                <strong className="block text-[#182440] text-[14px] mb-[3px] font-bold">Consent First</strong>
+                <p className="text-[12px] text-[#6b778c] leading-[1.5] font-normal">You choose whether to submit an image for analysis</p>
               </div>
             </div>
             {/* Benefit 2 */}
@@ -146,8 +156,8 @@ export function App() {
                 ✦
               </div>
               <div>
-                <strong className="block text-[#182440] text-[14px] mb-[3px] font-bold">AI-Powered</strong>
-                <p className="text-[12px] text-[#6b778c] leading-[1.5] font-normal">Advanced AI models for accurate analysis</p>
+                <strong className="block text-[#182440] text-[14px] mb-[3px] font-bold">Image Measurements</strong>
+                <p className="text-[12px] text-[#6b778c] leading-[1.5] font-normal">Basic photo-quality and color values</p>
               </div>
             </div>
             {/* Benefit 3 */}
@@ -156,8 +166,8 @@ export function App() {
                 ϟ
               </div>
               <div>
-                <strong className="block text-[#182440] text-[14px] mb-[3px] font-bold">Fast Results</strong>
-                <p className="text-[12px] text-[#6b778c] leading-[1.5] font-normal">Get results in seconds with detailed insights</p>
+                <strong className="block text-[#182440] text-[14px] mb-[3px] font-bold">Clear Limits</strong>
+                <p className="text-[12px] text-[#6b778c] leading-[1.5] font-normal">Informational results, not a medical diagnosis</p>
               </div>
             </div>
           </div>
@@ -166,42 +176,10 @@ export function App() {
         <div className="relative min-h-[530px] flex items-end justify-center">
           <img
             src={womenImage}
-            alt="AI-powered skin analysis"
+            alt="Example skin photo for image-quality review"
             className="w-full max-w-[590px] h-[530px] object-cover object-center rounded-[20px]"
           />
 
-          {/* Analysis Card */}
-          <div className="absolute top-[45px] left-[3%] w-[145px] bg-white/95 border border-[#e3eaf4] rounded-[16px] shadow-[0_12px_35px_rgba(35,77,130,0.12)] p-[18px] z-[3] max-sm:scale-80">
-            <small className="block text-[#69758a] text-xs mb-[5px] font-normal">AI Analysis</small>
-            <strong className="block text-[30px] text-[#123a91] font-bold">
-              82<span className="text-[14px] text-[#69758a] font-normal">/100</span>
-            </strong>
-            <label className="text-[#25a878] text-[13px] font-bold">Good</label>
-          </div>
-
-          {/* Recommendation Card */}
-          <div className="absolute top-[95px] right-0 w-[170px] bg-white/95 border border-[#e3eaf4] rounded-[16px] shadow-[0_12px_35px_rgba(35,77,130,0.12)] p-[18px] z-[3] max-sm:scale-80">
-            <div className="text-[24px] font-bold text-[#2878e8] mb-[7px]">✚</div>
-            <strong className="block text-[13px] text-[#273550] font-bold">Personalized</strong>
-            <span className="block text-[13px] text-[#273550] font-normal">Recommendations</span>
-          </div>
-
-          {/* Detect Card */}
-          <div className="absolute bottom-[105px] left-[12%] w-[145px] bg-white/95 border border-[#e3eaf4] rounded-[16px] shadow-[0_12px_35px_rgba(35,77,130,0.12)] p-[18px] z-[3] max-sm:scale-80">
-            <strong className="text-[14px] font-bold">Detects</strong>
-            <ul className="pl-[17px] mt-[8px] text-[#286db5] text-[12px] font-normal">
-              <li>Acne</li>
-              <li>Dark Spots</li>
-              <li>Pores</li>
-            </ul>
-          </div>
-
-          {/* Progress Card */}
-          <div className="absolute bottom-[90px] right-[2%] w-[110px] bg-white/95 border border-[#e3eaf4] rounded-[16px] shadow-[0_12px_35px_rgba(35,77,130,0.12)] p-[18px] z-[3] max-sm:scale-80">
-            <div className="text-[24px] font-bold text-[#2878e8] mb-[7px]">↗</div>
-            <strong className="block text-[13px] font-bold">Track</strong>
-            <span className="block text-[13px] font-normal">Progress</span>
-          </div>
         </div>
       </section>
 
@@ -214,18 +192,18 @@ export function App() {
               Smarter skin care starts with better insights.
             </h2>
             <p className="mb-5 leading-7 text-[#5f6d84]">
-              DermaCare AI is an AI-powered platform designed to help users understand visible skin concerns through image-based analysis.
+              DermaCare AI reports image-quality and basic color measurements to help users review their photos.
             </p>
             <p className="leading-7 text-[#5f6d84]">
-              The platform combines intelligent analysis with clear insights and personalized skincare guidance, making skin health information easier to understand and access.
+              Results are informational and affected by lighting, image quality, and camera settings. The service does not identify or diagnose skin conditions.
             </p>
           </div>
 
           <div className="rounded-3xl bg-[#f3f8ff] p-8 sm:p-10">
             <div className="mb-5 text-4xl text-[#2878e8]">✦</div>
-            <h3 className="mb-3 text-xl font-bold text-[#182440]">AI-Powered Skin Assistance</h3>
+            <h3 className="mb-3 text-xl font-bold text-[#182440]">Image-Quality Review</h3>
             <p className="leading-7 text-[#5f6d84]">
-              Upload a skin image, receive an AI-based analysis, and get useful insights to better understand your skin.
+              Upload a skin photo to review basic image-quality and color measurements. This tool does not detect or diagnose skin conditions.
             </p>
           </div>
         </div>
@@ -245,9 +223,9 @@ export function App() {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['01', 'Upload Image', 'Upload a clear image of the skin area you want to analyze.'],
-              ['02', 'AI Analysis', 'Our AI processes the image and analyzes visible skin characteristics.'],
-              ['03', 'Detect Condition', 'The system identifies possible visible skin concerns from the analysis.'],
-              ['04', 'Get Insights', 'Receive clear results and personalized skincare guidance.'],
+              ['02', 'Image Measurements', 'The service measures basic image quality and color values.'],
+              ['03', 'Review Measurements', 'See basic image-quality and color measurements.'],
+              ['04', 'Check the Report', 'Review image notes and limitations; results are not a diagnosis.'],
             ].map(([number, title, description]) => (
               <div key={number} className="rounded-2xl border border-[#e1e8f2] bg-white p-6 shadow-[0_8px_25px_rgba(35,77,130,0.05)]">
                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9f3ff] text-sm font-bold text-[#2168d7]">
@@ -270,15 +248,15 @@ export function App() {
               Everything you need for smarter skin care
             </h2>
             <p className="text-[#5f6d84]">
-              Designed to make skin analysis simple, informative and personalized.
+              Designed to make photo-quality checks simple and informative.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
             {[
-              ['▣', 'AI-Powered Detection', 'AI-based analysis helps identify visible skin concerns from uploaded images.'],
-              ['☷', 'Detailed Analysis', 'Get clear results with useful scores, observations and insights.'],
-              ['✧', 'Personalized Care', 'Receive skincare guidance based on the analysis and your needs.'],
+              ['▣', 'Image Quality', 'Review basic measurements related to image clarity and lighting.'],
+              ['☷', 'Color Measurements', 'See simple color measurements that can vary with lighting and camera settings.'],
+              ['✧', 'Informational Results', 'Use the report as a photo-quality reference, not as medical advice.'],
               ['✓', 'Secure & Private', 'Your images and information are handled with privacy and security in mind.'],
             ].map(([icon, title, description]) => (
               <div key={title} className="rounded-2xl border border-[#e2e7ef] bg-white p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[0_15px_35px_rgba(38,75,130,0.1)]">
