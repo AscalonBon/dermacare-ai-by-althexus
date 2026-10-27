@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import '../../styles/index.css';
 import logoImage from '../../assets/logo.jpeg';
 import skinImage from '../../assets/women-image.png';
+import { apiRequest } from '../../lib/api';
 
 // Route paths
 const homePath = import.meta.env.BASE_URL;
@@ -30,18 +31,45 @@ function Card({ children, className = '' }) {
 }
 
 export default function ProfilePage() {
-  // 🔄 TODO: Replace with real user data from backend
   const [profile, setProfile] = useState({
-    name: 'Priya Sharma',
-    age: 26,
-    email: 'priya@example.com',
+    name: '',
+    age: '',
+    email: '',
     avatar: null,
   });
 
   const [preview, setPreview] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!localStorage.getItem('dermacare-auth-token')) {
+      window.location.href = `${homePath}login`;
+      return;
+    }
+
+    let active = true;
+    apiRequest('/api/profile')
+      .then(({ user }) => {
+        if (!active) return;
+        setProfile({
+          name: user.name || '',
+          age: user.age ?? '',
+          email: user.email || '',
+          avatar: user.avatar || null,
+        });
+      })
+      .catch((error) => {
+        if (active) setMessage({ type: 'error', text: error.message || 'Unable to load your profile.' });
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => { active = false; };
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -52,8 +80,8 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setMessage({ type: 'error', text: 'Please select an image file.' });
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setMessage({ type: 'error', text: 'Choose a JPG, PNG, or WEBP image.' });
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
@@ -86,12 +114,28 @@ export default function ProfilePage() {
     }
 
     setIsSaving(true);
-
-    // 🔄 TODO: Replace with actual API call once backend endpoint is defined
-    setTimeout(() => {
+    try {
+      const { user } = await apiRequest('/api/profile', {
+        method: 'PUT',
+        body: {
+          name: profile.name.trim(),
+          age: Number(profile.age),
+          avatarDataUrl: profile.avatar,
+        },
+      });
+      setProfile((current) => ({
+        ...current,
+        name: user.name,
+        age: user.age ?? '',
+        email: user.email,
+        avatar: user.avatar || null,
+      }));
+      setMessage({ type: 'success', text: 'Profile saved.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Profile could not be saved.' });
+    } finally {
       setIsSaving(false);
-      setMessage({ type: 'success', text: 'Profile saved! (placeholder — not persisted)' });
-    }, 600);
+    }
   };
 
   return (
@@ -256,7 +300,7 @@ export default function ProfilePage() {
                     id="email"
                     name="email"
                     value={profile.email}
-                    onChange={handleChange}
+                    readOnly
                     placeholder="you@example.com"
                     className="w-full rounded-lg border-[1.5px] border-[#e5eaf0] bg-[#f7f9fc] px-3.5 py-3 text-sm text-[#182440] transition-all duration-200 placeholder:text-[#a4acbd] focus:border-[#0aa9ad] focus:bg-white focus:outline-none focus:shadow-[0_0_0_3px_rgba(10,169,173,0.1)]"
                   />
@@ -276,10 +320,10 @@ export default function ProfilePage() {
 
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || isLoading}
                   className="mt-1.5 w-full cursor-pointer rounded-[10px] bg-[#09275d] py-3.5 text-[15px] font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0b2c78] hover:shadow-[0_8px_20px_rgba(9,39,93,0.25)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSaving ? 'Saving…' : 'Save Changes'}
+                  {isLoading ? 'Loading…' : isSaving ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </Card>

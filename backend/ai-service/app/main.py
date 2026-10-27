@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import io
+import hmac
 import logging
+import os
 import uuid
 from typing import Any
 
 import cv2
 import numpy as np
 import torch
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from PIL import Image, UnidentifiedImageError
@@ -139,12 +141,20 @@ def image_metrics(bgr_image: np.ndarray) -> dict[str, Any]:
     }
 
 
+def require_service_key(x_api_key: str | None = Header(default=None)) -> None:
+    expected_key = os.getenv("ML_SERVICE_API_KEY", "")
+    if len(expected_key) < 32:
+        raise HTTPException(status_code=503, detail="Analysis service authentication is not configured.")
+    if not x_api_key or not hmac.compare_digest(x_api_key, expected_key):
+        raise HTTPException(status_code=401, detail="A valid service API key is required.")
+
+
 @app.get("/healthz")
 async def health() -> dict[str, Any]:
     return {"status": "ok", "classifier": "available" if model_runner.model else "not_configured"}
 
 
-@app.post("/analyze", response_model=None)
+@app.post("/analyze", response_model=None, dependencies=[Depends(require_service_key)])
 async def analyze(request: Request) -> dict[str, Any] | JSONResponse:
     content_type = request.headers.get("content-type", "")
     try:

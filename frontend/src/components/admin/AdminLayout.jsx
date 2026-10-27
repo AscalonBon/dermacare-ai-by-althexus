@@ -4,22 +4,22 @@ const BASE = import.meta.env.BASE_URL;
 
 // Backend errors can be { error: "text" } or { error: { code, message } }.
 // This always returns a readable string (prevents "[object Object]").
-export function getErrorMessage(data, fallback = "Something went wrong.") {
-  if (!data) return fallback;
-  if (typeof data.error === "string") return data.error;
-  if (data.error && typeof data.error.message === "string") {
-    return data.error.message;
-  }
-  if (typeof data.message === "string") return data.message;
-  return fallback;
-}
+// export function getErrorMessage(data, fallback = "Something went wrong.") {
+//   if (!data) return fallback;
+//   if (typeof data.error === "string") return data.error;
+//   if (data.error && typeof data.error.message === "string") {
+//     return data.error.message;
+//   }
+//   if (typeof data.message === "string") return data.message;
+//   return fallback;
+// }
 
 // Clears the admin session and goes to the login page.
-export function redirectToLogin() {
-  localStorage.removeItem("adminToken");
-  localStorage.removeItem("adminData");
-  window.location.href = `${BASE}admin`;
-}
+// export function redirectToLogin() {
+//   localStorage.removeItem("adminToken");
+//   localStorage.removeItem("adminData");
+//   window.location.href = `${BASE}admin`;
+// }
 
 const MENU_ITEMS = [
   { name: "Dashboard", icon: "dashboard", route: "admin/dashboard" },
@@ -27,7 +27,6 @@ const MENU_ITEMS = [
   { name: "Skin Analysis", icon: "analysis", route: "admin/skin-analysis" },
   { name: "Reports", icon: "reports", route: "admin/reports" },
   { name: "Manage Content", icon: "content", route: "admin/content" },
-  { name: "Feedback", icon: "feedback", route: "admin/feedback" },
   { name: "Settings", icon: "settings", route: "admin/settings" },
 ];
 
@@ -253,9 +252,7 @@ function AdminLayout({
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const profileRef = useRef(null);
-
   const admin = useMemo(() => (token ? getStoredAdmin(token) : null), [token]);
-
   const displayName =
     admin?.name || (admin?.email ? admin.email.split("@")[0] : "Admin");
   const displayEmail = admin?.email || "";
@@ -296,7 +293,6 @@ function AdminLayout({
         setMobileNavOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
     return () => {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import AdminLayout from "./AdminLayout";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = API_BASE_URL;
 
 // Backend errors look like { error: { code, message } } or { error: "text" }.
 // This always turns them into a readable string (fixes "[object Object]").
@@ -61,10 +62,12 @@ function AdminUsers() {
   };
 
   useEffect(() => {
-    fetchUsers();
+    queueMicrotask(() => { void fetchUsers(); });
   }, []);
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [thirtyDaysAgo] = useState(
+    () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  );
 
   // A user counts as active if not explicitly disabled and had activity in the last 30 days.
   const isUserActive = (user) => {

@@ -1,86 +1,33 @@
-# DermaCare image analysis service
+# DermaCare Services
 
-The Python service provides image-quality and basic color measurements using Pillow, OpenCV, and PyTorch. Measurements are informational, sensitive to lighting and skin tone, and are not a medical diagnosis. No classifier is enabled until a model is trained and configured.
+The project has an Express API, a MongoDB database, and a Python image-analysis service. The analysis currently reports image quality and basic color measurements only; it does not diagnose skin conditions. The optional classifier is unavailable until a project-specific model is trained and configured.
 
-## Run locally
+## Local stack
 
-From `backend/ai-service`:
+1. Copy `.env.example` to `.env` and set three distinct random values for `AUTH_TOKEN_SECRET`, `ADMIN_TOKEN_SECRET`, and `ML_SERVICE_API_KEY` (each at least 32 characters).
+2. Start Docker Compose from the repository root with `docker compose up --build`.
+3. Check `http://localhost:5000/healthz`. It returns `200` only when MongoDB and the AI service are ready.
+4. Configure the Vite frontend with `VITE_API_URL=http://localhost:5000` and start it from `frontend` using `npm run dev`.
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
+The AI service is not published to a host port by Compose. Express calls it over the private Compose network and supplies `ML_SERVICE_API_KEY`. If hosting the AI service separately, set the same key on the AI and Express deployments and set Express `ML_SERVICE_URL` to the AI service's private HTTPS address.
 
-Run the Express API from `backend/server` with `MONGO_URI`, `AUTH_TOKEN_SECRET`, `GOOGLE_CLIENT_ID`, `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_TOKEN_SECRET` configured in `backend/server/.env` (or exported in the shell). The root `.env.example` shows the required variable names. The admin API authenticates the configured server-side account and issues expiring signed tokens; never use the example credentials outside local development. The frontend uses `VITE_API_URL` if configured, otherwise it connects to `http://localhost:5000` during development.
+## Admin bootstrap
 
-### Google sign-in setup
+Create the first admin once the API and MongoDB are available. Set `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the API process environment for the command, with a password of at least 12 characters, then run `npm run create-admin` from `backend/server`. The command refuses to overwrite an existing account. Do not expose an admin-registration endpoint.
 
-Create a **Web application** OAuth client in Google Cloud Console, configure the Google Auth Platform consent screen, and add the required test users while the app remains in Testing. Add `http://localhost:5173` as an authorized JavaScript origin for local development and add the production frontend origin when deploying. No redirect URI is used for the Google Identity Services button.
+## Deployment
 
-Use the same OAuth client ID in backend `GOOGLE_CLIENT_ID` and frontend `VITE_GOOGLE_CLIENT_ID`. The client ID is public; the backend independently verifies every Google ID token against this configured audience and requires a verified email. Set the corresponding Vercel environment variables and redeploy both projects when enabling production Google sign-in. The backend returns the app's own signed user token; Google tokens are never used to access application APIs.
+Deploy the AI service first and confirm `/healthz` returns `200`. Then deploy `backend/server` with `MONGO_URI`, `AUTH_TOKEN_SECRET`, `ADMIN_TOKEN_SECRET`, `ML_SERVICE_URL`, and `ML_SERVICE_API_KEY`. Set `FRONTEND_ORIGINS` to the exact HTTPS frontend origin. The Vercel frontend must have `VITE_API_URL` set to the HTTPS Express API origin and be redeployed after changing it.
 
-### Run the frontend and backend locally
+The authenticated API routes include registration, login, profile, image upload/retrieval, and per-user analysis history. `/api/images/:imageId/analyze` is rate-limited and requires a user token; `/analyze` on the Python service separately requires the internal service key. `/healthz` is an unauthenticated readiness endpoint and does not reveal configuration values.
 
-Use two terminals from the repository root:
+## API details
 
-```powershell
-# Terminal 1: backend
-Set-Location backend/server
-npm run dev
-```
+- `GET /healthz` reports MongoDB and AI-service readiness.
+- `POST /analyze` accepts raw JPG, PNG, or WEBP bytes with a matching `Content-Type` and `X-API-Key` header.
+- Express stores accepted images in MongoDB and returns them from `GET /api/images/:imageId` only to their owner.
+- `POST /api/images/:imageId/analyze` calls the AI service and saves the result for the authenticated owner.
+- `GET /api/analyses` and `GET /api/analyses/:analysisId` return only the authenticated user's history.
+- Uploads are limited to 10 MB in the API and AI service.
 
-```powershell
-# Terminal 2: frontend
-Set-Location frontend
-npm run dev
-```
-
-Set the backend variables in `backend/server/.env` and ensure MongoDB is reachable through `MONGO_URI`. Open `http://localhost:5173/admin`, then sign in using `ADMIN_EMAIL` and `ADMIN_PASSWORD`. The dashboard shows real user and analysis counts from MongoDB.
-
-## Train a classifier
-
-Prepare labeled images in PyTorch ImageFolder format. Each class folder name becomes a model label:
-
-```text
-dataset/
-  class-a/
-    image-1.jpg
-  class-b/
-    image-2.jpg
-```
-
-From `backend/ai-service`, run:
-
-```powershell
-python train.py --data .\dataset --output .\models\skin_classifier.pt --epochs 10
-```
-
-Set `MODEL_PATH` to the resulting checkpoint before starting the service. Use only appropriately licensed, consented, representative, and clinically reviewed data. The included small CNN and training script are an integration baseline, not a validated dermatology model. Its labels and scores must not be presented as diagnosis or treatment guidance.
-
-## API and storage
-
-- `GET /healthz` reports service and optional classifier readiness.
-- `POST /analyze` accepts the raw image bytes with a JPG, PNG, or WEBP `Content-Type`.
-- `POST /api/auth/register` creates a user account and `POST /api/auth/login` verifies credentials. Passwords are stored as scrypt hashes; set a strong server-only `AUTH_TOKEN_SECRET` to issue 7-day bearer tokens.
-- `POST /api/auth/google` verifies a Google Identity Services ID token, creates or links a user account by verified email, and returns the same application bearer token as password login.
-- Image upload, retrieval, and analysis require a valid user bearer token and are tied to that account.
-- Express stores accepted uploads in MongoDB and returns them from `GET /api/images/:imageId`.
-- `POST /api/images/:imageId/analyze` sends the stored image to the ML service.
-- `POST /api/admin/login` authenticates the configured admin account; `GET /api/admin/dashboard` and `GET /api/admin/stats` are protected by its eight-hour signed bearer token.
-- Both services include a request ID and a consistent `{ "error": { "code", "message", "requestId" } }` error shape.
-
-Uploads are temporarily limited to 3 MB to stay below Vercel's 4.5 MB function request/response body limit after base64 encoding.
-
-## Vercel and MongoDB Atlas deployment
-
-Deploy the Express API and frontend as separate Vercel projects from this repository:
-
-1. Set the API project's root directory to `backend/server`. Add `MONGO_URI`, `AUTH_TOKEN_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, and `ADMIN_TOKEN_SECRET` as Vercel environment variables. Both token secrets must be unique random values of at least 32 characters; never commit them or place them in `VITE_` variables. Use a unique strong admin password. Redeploy the backend after changing its environment. Also set `ML_SERVICE_URL` for analysis. The API opens a cached Mongoose connection when a database route is called. Deploy and verify `https://<api-domain>/api/health`.
-2. Set the frontend project's root directory to `frontend`. Add `VITE_API_URL` set to the API's HTTPS origin, without a trailing `/api` (for example, `https://<api-domain>`), then redeploy. Vite variables are embedded at build time. The Vite asset base is `/`, suitable for Vercel.
-3. In Atlas, use a dedicated database user with only required permissions. Vercel Hobby deployments do not have a fixed outbound IP to allowlist, so Atlas Network Access must permit dynamic connections. Never put `MONGO_URI` in a `VITE_` variable or commit the URI.
-
-The admin dashboard endpoints require a short-lived signed bearer token obtained from `/api/admin/login`. The image-analysis endpoint additionally requires `ML_SERVICE_URL` to point to a separately deployed Python service. Database-backed routes work independently of the ML service.
-
-Images are stored in MongoDB documents for this prototype, so the small upload cap can consume Atlas storage. Move image bytes to object storage and keep only their metadata/object keys in MongoDB before accepting larger or frequent uploads. Image upload, retrieval, and analysis require authentication and are restricted to the owning account.
+The application stores sensitive image data. Use a private database, TLS-only service URLs, least-privilege credentials, backups with an explicit retention policy, and a reviewed privacy notice before production use. The classifier is not a validated medical model; do not present its output as diagnosis or treatment advice.

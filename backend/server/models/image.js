@@ -23,6 +23,17 @@ const imageSchema = new mongoose.Schema(
       type: Buffer,
       required: true,
     },
+
+    privacyConsentAt: {
+      type: Date,
+      required: true,
+    },
+
+    privacyConsentVersion: {
+      type: String,
+      required: true,
+      maxlength: 32,
+    },
   },
   {
     timestamps: true,

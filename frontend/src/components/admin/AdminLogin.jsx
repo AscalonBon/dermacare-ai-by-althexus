@@ -1,10 +1,8 @@
 import { useState } from "react";
 import logo from "../../assets/admin-logo.png";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_BASE = (
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? "http://localhost:5000" : "")
-).replace(/\/$/, "");
+const API_BASE = API_BASE_URL;
 
 function AdminLogin() {
   const [email, setEmail] = useState("");

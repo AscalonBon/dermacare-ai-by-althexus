@@ -37,6 +37,7 @@ const Login = () => {
   const googleButtonRef = useRef(null);
   const [isLogin, setIsLogin] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -138,6 +139,14 @@ const Login = () => {
         setMessage({ type: 'error', text: 'Passwords do not match.' });
         return;
       }
+      if (!privacyConsent) {
+        setMessage({ type: 'error', text: 'Accept the privacy notice to create your account.' });
+        return;
+      }
+      if (!privacyConsent) {
+        setMessage({ type: 'error', text: 'Accept the privacy notice to create your account.' });
+        return;
+      }
     }
 
     if (!apiBaseUrl) {
@@ -157,6 +166,8 @@ const Login = () => {
           ...(isLogin ? {} : { name: formData.name.trim() }),
           email: formData.email.trim(),
           password: formData.password,
+          ...(isLogin ? {} : { privacyConsent }),
+          ...(isLogin ? {} : { privacyConsent }),
         }),
       });
       const result = await response.json();
@@ -181,6 +192,8 @@ const Login = () => {
 
   const switchMode = () => {
     setIsLogin((current) => !current);
+    setPrivacyConsent(false);
+    setPrivacyConsent(false);
     setFormData({ name: '', email: '', password: '', confirmPassword: '' });
     setMessage({ type: '', text: '' });
   };
@@ -221,6 +234,18 @@ const Login = () => {
                 className="w-full px-3.5 py-3 text-sm font-[Arial,Helvetica,sans-serif] border-[1.5px] border-[#E2E7EF] rounded-lg bg-[#F5F9FF] text-[#1A1A1A] transition-all duration-200 box-border focus:outline-none focus:border-[#2168D7] focus:bg-white focus:shadow-[0_0_0_3px_rgba(33,104,215,0.1)] placeholder:text-[#A0AEC0] max-sm:px-3 max-sm:py-[11px]"
               />
             </div>
+          )}
+
+          {!isLogin && (
+            <label className="flex items-start gap-3 text-xs leading-5 text-[#5F6D84]">
+              <input
+                type="checkbox"
+                checked={privacyConsent}
+                onChange={(event) => setPrivacyConsent(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-[#147b82]"
+              />
+              <span>I have read and accept the privacy notice. I understand image-analysis consent will be requested separately before an image is uploaded.</span>
+            </label>
           )}
 
           <div className="flex flex-col gap-1.5">
@@ -277,6 +302,18 @@ const Login = () => {
                 className="w-full px-3.5 py-3 text-sm font-[Arial,Helvetica,sans-serif] border-[1.5px] border-[#E2E7EF] rounded-lg bg-[#F5F9FF] text-[#1A1A1A] transition-all duration-200 box-border focus:outline-none focus:border-[#2168D7] focus:bg-white focus:shadow-[0_0_0_3px_rgba(33,104,215,0.1)] placeholder:text-[#A0AEC0] max-sm:px-3 max-sm:py-[11px]"
               />
             </div>
+          )}
+
+          {!isLogin && (
+            <label className="flex items-start gap-3 text-xs leading-5 text-[#5F6D84]">
+              <input
+                type="checkbox"
+                checked={privacyConsent}
+                onChange={(event) => setPrivacyConsent(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-[#147b82]"
+              />
+              <span>I have read and accept the privacy notice. I understand image-analysis consent will be requested separately before an image is uploaded.</span>
+            </label>
           )}
 
           {message.text && (

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
+import { apiRequest } from '../lib/api';
 
 const homePath = import.meta.env.BASE_URL;
 const apiBaseUrl = (
 	import.meta.env.VITE_API_URL ||
 	(import.meta.env.DEV ? 'http://localhost:5000' : '')
 ).replace(/\/$/, '');
+const requestedAnalysisId = new URLSearchParams(window.location.search).get('analysis');
 
 function ReportCard({ children, className = '' }) {
 	return <section className={`rounded-2xl border border-[#e3eaf1] bg-white p-5 shadow-[0_6px_20px_rgba(25,53,90,0.05)] sm:p-6 ${className}`}>{children}</section>;
@@ -17,19 +19,47 @@ function Measurement({ label, value, unit = '' }) {
 }
 
 export default function ReportPage() {
-	const [analysis] = useState(() => {
+	const [analysis, setAnalysis] = useState(() => {
+		if (requestedAnalysisId) return null;
 		try {
 			return JSON.parse(sessionStorage.getItem('dermacare-analysis') || 'null');
 		} catch {
 			return null;
 		}
 	});
+	const hasAuthToken = Boolean(localStorage.getItem('dermacare-auth-token'));
+	const needsHistoryLoad = Boolean(requestedAnalysisId || !analysis);
+	const [isLoadingHistory, setIsLoadingHistory] = useState(hasAuthToken && needsHistoryLoad);
+	const [loadError, setLoadError] = useState(!hasAuthToken && needsHistoryLoad ? 'Sign in to view saved analyses.' : '');
 	const [imageUrl, setImageUrl] = useState('');
 	const [imageError, setImageError] = useState(() => (
 		analysis?.imageUrl && !localStorage.getItem('dermacare-auth-token')
 			? 'Sign in again to view this image.'
 			: ''
 	));
+
+	useEffect(() => {
+		if ((requestedAnalysisId && analysis?._id === requestedAnalysisId) || (!requestedAnalysisId && analysis)) return undefined;
+		if (!localStorage.getItem('dermacare-auth-token')) return undefined;
+		let active = true;
+		const request = requestedAnalysisId
+			? apiRequest(`/api/analyses/${requestedAnalysisId}`)
+			: apiRequest('/api/analyses');
+		request
+			.then((result) => {
+				if (!active) return;
+				const record = requestedAnalysisId ? result.analysis : result.analyses?.[0];
+				if (!record) return;
+				setAnalysis({ ...record, ...(record.analysisResult || {}) });
+			})
+			.catch((error) => {
+				if (active) setLoadError(error.message || 'Saved analysis could not be loaded.');
+			})
+			.finally(() => {
+				if (active) setIsLoadingHistory(false);
+			});
+		return () => { active = false; };
+	}, [analysis]);
 
 	useEffect(() => {
 		if (!analysis?.imageUrl) return undefined;
@@ -69,8 +99,10 @@ export default function ReportPage() {
 			<main className="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 lg:py-12">
 				<div className="mb-8"><p className="mb-2 text-xs font-bold uppercase tracking-[2px] text-[#2878e8]">Image analysis</p><h1 className="text-3xl font-bold text-[#10245c] sm:text-4xl">Your image report</h1><p className="mt-2 text-sm text-[#69758a]">Informational image-quality and color measurements</p></div>
 
-				{!analysis ? (
-					<ReportCard><h2 className="text-lg font-bold">No analysis found</h2><p className="mt-2 text-sm text-[#69758a]">Upload an image to create an analysis report.</p><a href={`${homePath}analyze`} className="mt-5 inline-flex rounded-lg bg-[#09275d] px-5 py-3 text-xs font-bold text-white transition hover:bg-[#0b2c78]">Analyze an image →</a></ReportCard>
+				{isLoadingHistory ? (
+					<ReportCard><p className="text-sm text-[#69758a]">Loading saved analysis…</p></ReportCard>
+				) : !analysis ? (
+					<ReportCard><h2 className="text-lg font-bold">{loadError || 'No analysis found'}</h2><p className="mt-2 text-sm text-[#69758a]">Upload an image to create an analysis report.</p><a href={`${homePath}analyze`} className="mt-5 inline-flex rounded-lg bg-[#09275d] px-5 py-3 text-xs font-bold text-white transition hover:bg-[#0b2c78]">Analyze an image →</a></ReportCard>
 				) : (
 					<>
 						<div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">

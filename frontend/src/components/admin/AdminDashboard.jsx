@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
-import AdminLayout, {
-  AdminIcon,
-  getErrorMessage,
-  redirectToLogin,
-} from "./AdminLayout";
+import AdminLayout, { AdminIcon } from "./AdminLayout";
+import { getErrorMessage, redirectToLogin } from "./adminUtils";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_BASE = (
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? "http://localhost:5000" : "")
-).replace(/\/$/, "");
+const API_BASE = API_BASE_URL;
 const BASE = import.meta.env.BASE_URL;
 
 const goTo = (route) => {

@@ -43,6 +43,18 @@ const userSchema = new mongoose.Schema(
       enum: ["normal", "dry", "oily", "combination", "sensitive"],
     },
 
+    avatarDataUrl: {
+      type: String,
+      maxlength: 2800000,
+    },
+
+    privacyConsentAt: Date,
+
+    privacyConsentVersion: {
+      type: String,
+      maxlength: 32,
+    },
+
     // Last time the user performed an activity
     lastActiveAt: {
       type: Date,

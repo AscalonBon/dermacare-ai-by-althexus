@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
-import AdminLayout, {
-  AdminIcon,
-  getErrorMessage,
-  redirectToLogin,
-} from "./AdminLayout";
+import AdminLayout, { AdminIcon } from "./AdminLayout";
+import { getErrorMessage, redirectToLogin } from "./adminUtils";
+import { API_BASE_URL } from "../../lib/api";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = API_BASE_URL;
 
 function AdminSettings() {
-  const [admin, setAdmin] = useState(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [initialAdmin] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("adminData")) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [admin, setAdmin] = useState(initialAdmin);
+  const [name, setName] = useState(initialAdmin?.name || "");
+  const [email, setEmail] = useState(initialAdmin?.email || "");
   const [password, setPassword] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -30,13 +35,6 @@ function AdminSettings() {
     if (!token) {
       redirectToLogin();
       return;
-    }
-
-    try {
-      const savedAdmin = JSON.parse(localStorage.getItem("adminData"));
-      if (savedAdmin) applyAdmin(savedAdmin);
-    } catch {
-      // ignore bad JSON
     }
 
     const loadProfile = async () => {
