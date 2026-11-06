@@ -9,6 +9,8 @@ The project has an Express API, a MongoDB database, and a Python image-analysis 
 3. Check `http://localhost:5000/healthz`. It returns `200` only when MongoDB and the AI service are ready.
 4. Configure the Vite frontend with `VITE_API_URL=http://localhost:5000` and start it from `frontend` using `npm run dev`.
 
+Keep `.env` files local; they are excluded by `.gitignore`. If credentials were ever committed, rotate them immediately because deleting the file from the latest version does not remove it from Git history.
+
 The AI service is not published to a host port by Compose. Express calls it over the private Compose network and supplies `ML_SERVICE_API_KEY`. If hosting the AI service separately, set the same key on the AI and Express deployments and set Express `ML_SERVICE_URL` to the AI service's private HTTPS address.
 
 ## Admin bootstrap

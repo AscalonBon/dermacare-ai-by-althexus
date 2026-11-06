@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
-import { apiRequest } from '../lib/api';
+import { API_BASE_URL, apiRequest } from '../lib/api';
 
 const homePath = import.meta.env.BASE_URL;
-const apiBaseUrl = (
-	import.meta.env.VITE_API_URL ||
-	(import.meta.env.DEV ? 'http://localhost:5000' : '')
-).replace(/\/$/, '');
 const requestedAnalysisId = new URLSearchParams(window.location.search).get('analysis');
 
 function ReportCard({ children, className = '' }) {
@@ -68,7 +64,7 @@ export default function ReportPage() {
 
 		let objectUrl;
 		const controller = new AbortController();
-		fetch(`${apiBaseUrl}${analysis.imageUrl}`, {
+		fetch(`${API_BASE_URL}${analysis.imageUrl}`, {
 			headers: { Authorization: `Bearer ${token}` },
 			signal: controller.signal,
 		})

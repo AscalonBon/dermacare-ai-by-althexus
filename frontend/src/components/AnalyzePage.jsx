@@ -3,12 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import '../styles/index.css';
 import logoImage from '../assets/logo.jpeg';
 import skinImage from '../assets/women-image.png';
+import { API_BASE_URL } from '../lib/api';
 
 const homePath = import.meta.env.BASE_URL;
-const apiBaseUrl = (
-	import.meta.env.VITE_API_URL ||
-	(import.meta.env.DEV ? 'http://localhost:5000' : '')
-).replace(/\/$/, '');
 
 export default function AnalyzePage() {
 	const navigate = useNavigate();
@@ -50,7 +47,7 @@ export default function AnalyzePage() {
 			setErrorMessage('Please review and accept the image-analysis consent before continuing.');
 			return;
 		}
-		if (!apiBaseUrl && !import.meta.env.DEV) {
+		if (!API_BASE_URL && !import.meta.env.DEV) {
 			setErrorMessage('The API URL is not configured. Set VITE_API_URL and redeploy the frontend.');
 			return;
 		}
@@ -65,7 +62,7 @@ export default function AnalyzePage() {
 			}
 			const imageData = btoa(binary);
 
-			const uploadResponse = await fetch(`${apiBaseUrl}/api/images`, {
+			const uploadResponse = await fetch(`${API_BASE_URL}/api/images`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -83,7 +80,7 @@ export default function AnalyzePage() {
 				throw new Error(uploadResult.error?.message || 'The image could not be saved.');
 			}
 
-			const analysisResponse = await fetch(`${apiBaseUrl}/api/images/${uploadResult.imageId}/analyze`, {
+			const analysisResponse = await fetch(`${API_BASE_URL}/api/images/${uploadResult.imageId}/analyze`, {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${authToken}` },
 			});
